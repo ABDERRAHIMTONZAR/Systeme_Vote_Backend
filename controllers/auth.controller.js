@@ -6,7 +6,7 @@ let db = require('../db/db');
 exports.createUser=async (req, res, next)=> {
     const {name,prenom, email, password} = req.body;
     if(!name || !email || !password || !prenom){
-       console.error("Les champs sont vides")
+       console.error("Les champs sont  vides")
       return res.status(400).send("Les champs sont vides")
     }
     let passwordCrypte=await bcrypt.hash(password,10)

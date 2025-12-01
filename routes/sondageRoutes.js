@@ -6,5 +6,8 @@ const {auth} = require("../middleware/auth");
 router.get("/voted",auth,sondageCtrl.getVotedPolls);
 router.get("/unvoted",auth,sondageCtrl.getUnvotedPolls);
 router.get("/result",sondageCtrl.getPollResults);
+router.put("/auto-finish",sondageCtrl.autoFinishSondages);
+
+
 module.exports = router;
    

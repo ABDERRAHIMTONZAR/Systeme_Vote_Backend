@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const sondageCtrl = require("../controllers/pollController");
-const auth = require("../middleware/auth");
+const {auth} = require("../middleware/auth");
 
-router.get("/voted", sondageCtrl.getVotedPolls);
-router.get("/unvoted", sondageCtrl.getUnvotedPolls);
-
+router.get("/voted",auth,sondageCtrl.getVotedPolls);
+router.get("/unvoted",auth,sondageCtrl.getUnvotedPolls);
+router.get("/result",sondageCtrl.getPollResults);
 module.exports = router;
+   

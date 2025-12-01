@@ -33,7 +33,7 @@ exports.createUser = async (req, res) => {
 
 exports.loginUser = (req, res) => {
     const { email, password } = req.body;
-
+console.log("CODE LOGIN OK", req.body);
     if (!email || !password) {
         console.log("Les champs sont vides");
         return res.status(400).json({ message: "Les champs sont vides" });
@@ -53,8 +53,8 @@ exports.loginUser = (req, res) => {
         }
 
         const user = result[0]; 
-
-        const correct = await bcrypt.compare(password, user.Password);
+ console.log("USER FROM DB =", user);
+       const correct = await bcrypt.compare(password, user.password);
         if (!correct) {
             console.log("Mot de passe incorrect");
             return res.status(400).json({ message: "Mot de passe incorrect" });
@@ -62,14 +62,14 @@ exports.loginUser = (req, res) => {
 
         const token = jwt.sign(
             {
-                id: user.id_user,
-                nom: user.nom,
-                prenom: user.prenom
+                id: user.Id_user,
+                nom: user.Nom,
+                prenom: user.Prenom
             },
             "SECRET_KEY",
             { expiresIn: "2h" }
         );
-
+        console.log("TOKEN =", token);
         return res.status(200).json({
             message: "Authentification réussie",
             token: token

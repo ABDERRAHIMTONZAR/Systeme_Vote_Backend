@@ -9,7 +9,8 @@ exports.auth = (req, res, next) => {
 
     jwt.verify(token, "SECRET_KEY", (err, decoded) => {
         if (err) return res.status(401).send("Token invalide");
-
+console.log("TOKEN RECU =", token);
+console.log("SECRET KEY =", "SECRET_KEY");
         req.userId = decoded.id; 
         next();
     });

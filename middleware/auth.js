@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 
-module.exports = (req, res, next) => {
+exports.auth = (req, res, next) => {
     const header = req.headers.authorization;
 
     if (!header) return res.status(401).send("Token manquant");
@@ -9,7 +9,8 @@ module.exports = (req, res, next) => {
 
     jwt.verify(token, "SECRET_KEY", (err, decoded) => {
         if (err) return res.status(401).send("Token invalide");
-
+console.log("TOKEN RECU =", token);
+console.log("SECRET KEY =", "SECRET_KEY");
         req.userId = decoded.id; 
         next();
     });

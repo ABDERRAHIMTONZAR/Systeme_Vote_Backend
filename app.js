@@ -11,12 +11,13 @@ let indexRouter = require('./routes/index');
 let autroutes = require('./routes/auth.routes');
  let sondageRoutes = require('./routes/sondageRoutes');
  let voteRoutes = require('./routes/voteRoutes');
-
+  let dashboardRoutes = require('./routes/dashboardRoutes');
 
 app.use('/', indexRouter);
 app.use('/users', autroutes);
 app.use('/sondage', sondageRoutes);
 app.use('/vote', voteRoutes);
+app.use('/dashboard', dashboardRoutes);
 app.listen(3001, () => {
   console.log('Example app listening on port 3001!')
 })

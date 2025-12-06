@@ -28,19 +28,18 @@ exports.getVotedPolls = (req, res) => {
     return res.status(200).json(result);
   });
 };
-
-
 exports.getUnvotedPolls = (req, res) => {
   const userId = req.userId;
-  console.log(userId);
+  const categorie = req.query.categorie; // récupère la catégorie si envoyée
 
-  const sql = `
+  let sql = `
     SELECT 
       S.Id_Sondage AS id,
       S.question,
       S.End_time AS end_time,
-      S.Etat as Etat,
+      S.Etat AS Etat,
       S.Id_user AS user_id,
+      S.categorie AS categorie,
       (
         SELECT COUNT(*) 
         FROM votes V 
@@ -52,13 +51,23 @@ exports.getUnvotedPolls = (req, res) => {
     )
   `;
 
-  db.query(sql, [userId], (err, result) => {
+  const params = [userId];
+
+  // 👉 Si une catégorie est fournie, ajoute le filtre SQL
+  if (categorie) {
+    sql += ` AND S.categorie = ? `;
+    params.push(categorie);
+  }
+
+  sql += ` ORDER BY S.Id_Sondage DESC`;
+
+  db.query(sql, params, (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json(err);
     }
 
-    return res.status(200).json(result);
+    res.status(200).json(result);
   });
 };
 
@@ -105,3 +114,65 @@ exports.autoFinishSondages = (req, res) => {
     });
   });
  };
+
+ exports.getSondageById = (req, res) => {
+  const id_sondage = req.params.id_sondage;
+  console.log(id_sondage)
+  const sql = "SELECT * FROM sondages WHERE Id_Sondage = ?";
+  db.query(sql, [id_sondage], (err, result) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Erreur serveur" });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: "Sondage non trouvé" });
+    }
+
+    res.json(result[0]);
+  });
+};
+
+exports.getSondageWithOptions = (req, res) => {
+  const id_sondage = req.params.id_sondage;
+console.log(id_sondage)
+  // Récupérer le sondage
+  const sondageQuery = "SELECT * FROM sondages WHERE Id_Sondage = ?";
+  db.query(sondageQuery, [id_sondage], (err, sondageResult) => {
+    if (err) return res.status(500).json(err);
+    if (sondageResult.length === 0)
+      return res.status(404).json({ message: "Sondage non trouvé" });
+
+    const sondage = sondageResult[0];
+
+    // Récupérer les options du sondage
+    const optionsQuery = "SELECT Id_Option, option_text FROM optionssondage WHERE Id_Sondage = ?";
+    db.query(optionsQuery, [id_sondage], (err, optionsResult) => {
+      if (err) return res.status(500).json(err);
+
+      sondage.options = optionsResult.map(opt => ({
+        id_option: opt.Id_Option,
+        label: opt.option_text
+      }));
+
+      res.json(sondage);
+    });
+  });
+};
+
+exports.getCategories = (req, res) => {
+  const sql = `
+    SELECT DISTINCT Categorie 
+    FROM sondages
+    WHERE Categorie IS NOT NULL AND Categorie <> ''
+    ORDER BY Categorie ASC
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("Erreur récupération catégories :", err);
+      return res.status(500).json({ error: "Erreur serveur" });
+    }
+    res.json(results);
+  });
+};

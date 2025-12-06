@@ -1,14 +1,16 @@
 let db = require("../db/db");
 exports.getVotedPolls = (req, res) => {
   const userId = req.userId;
-  console.log(userId);
-    const sql = `
+  const categorie = req.query.categorie;
+
+  let sql = `
     SELECT 
       S.Id_Sondage AS id,
       S.question,
       S.End_time AS end_time,
       S.Etat AS state,
       S.Id_user AS user_id,
+      S.categorie AS categorie,
       (
         SELECT COUNT(*) 
         FROM votes V2 
@@ -17,10 +19,19 @@ exports.getVotedPolls = (req, res) => {
     FROM sondages S
     JOIN votes V ON S.Id_Sondage = V.Id_Sondage
     WHERE V.Id_user = ?
-    GROUP BY S.Id_Sondage;
   `;
 
-  db.query(sql, [userId], (err, result) => {
+  const params = [userId];
+
+  // Filtrer par catégorie si fournie
+  if (categorie) {
+    sql += ` AND S.categorie = ? `;
+    params.push(categorie);
+  }
+
+  sql += ` GROUP BY S.Id_Sondage ORDER BY S.Id_Sondage DESC`;
+
+  db.query(sql, params, (err, result) => {
     if (err) {
       console.error(err);
       return res.status(500).json(err);
@@ -28,6 +39,7 @@ exports.getVotedPolls = (req, res) => {
     return res.status(200).json(result);
   });
 };
+
 exports.getUnvotedPolls = (req, res) => {
   const userId = req.userId;
   const categorie = req.query.categorie; // récupère la catégorie si envoyée
@@ -76,7 +88,6 @@ exports.getUnvotedPolls = (req, res) => {
 
 exports.getPollResults = (req, res) => {
   const { id_sondage } = req.body;
-
   if (!id_sondage) {
     return res.status(400).json({ message: "Tous les champs sont requis." });
   }

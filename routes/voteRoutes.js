@@ -7,3 +7,5 @@ router.post("/insert", auth, voteController.insertVote);
 
 
 module.exports = router;
+
+

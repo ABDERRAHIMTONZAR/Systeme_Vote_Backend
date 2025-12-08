@@ -4,6 +4,7 @@ const { getDashboardStats } = require("../controllers/dashboardController");
 const { getMonthlyStats } = require("../controllers/dashboardController");
 const { getPollStatusDistribution } = require("../controllers/dashboardController");
 const { getVoterEngagementDistribution } = require("../controllers/dashboardController");
+const { createPoll } = require("../controllers/dashboardController");
 const {auth} = require("../middleware/auth");
 
 router.get("/stats", auth, getDashboardStats);
@@ -11,5 +12,6 @@ router.get("/monthly-stats",auth, getMonthlyStats);
 
 router.get("/poll-status", auth,getPollStatusDistribution);
 router.get("/engagement", auth, getVoterEngagementDistribution);
+router.post("/create-poll", auth, createPoll);
 
 module.exports = router;

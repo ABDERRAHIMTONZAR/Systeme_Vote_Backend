@@ -103,28 +103,61 @@ exports.getPollResults = (req, res) => {
     return res.status(200).json(result);
   });
 };
+const { notifyVoters } = require("./notifyVoters");
+
 
 
 exports.autoFinishSondages = (req, res) => {
-  const sql = `
-    UPDATE sondages
-    SET Etat = 'finished'
-    WHERE End_time <= NOW()
-    AND Etat != 'finished'
+  // Étape 1 : récupérer tous les sondages qui sont terminés mais pas encore 'finished'
+  const selectSql = `
+    SELECT Id_Sondage 
+    FROM sondages 
+    WHERE End_time <= NOW() 
+      AND Etat != 'finished'
   `;
 
-  db.query(sql, (err, result) => {
+  db.query(selectSql, async (err, results) => {
     if (err) {
-      console.error("Erreur SQL :", err);
+      console.error("Erreur SQL lors de la sélection :", err);
       return res.status(500).json({ message: "Erreur serveur" });
     }
 
-    res.json({
-      message: "Mise à jour automatique effectuée",
-      updated: result.affectedRows
-    });
+    if (!results || results.length === 0) {
+      return res.json({ message: "Aucun sondage à terminer", updated: 0 });
+    }
+
+    try {
+      // Pour chaque sondage, notifier les votants
+      for (const row of results) {
+        await notifyVoters(row.Id_Sondage);
+      }
+
+      // Étape 2 : mettre à jour l'état des sondages
+      const updateSql = `
+        UPDATE sondages
+        SET Etat = 'finished'
+        WHERE End_time <= NOW() 
+          AND Etat != 'finished'
+      `;
+
+      db.query(updateSql, (err, result) => {
+        if (err) {
+          console.error("Erreur SQL lors de la mise à jour :", err);
+          return res.status(500).json({ message: "Erreur serveur" });
+        }
+
+        res.json({
+          message: "Mise à jour automatique effectuée et votants notifiés",
+          updated: result.affectedRows,
+        });
+      });
+    } catch (error) {
+      console.error("Erreur lors de la notification :", error);
+      return res.status(500).json({ message: "Erreur lors de l'envoi des emails" });
+    }
   });
- };
+};
+
 
  exports.getSondageById = (req, res) => {
   const id_sondage = req.params.id_sondage;

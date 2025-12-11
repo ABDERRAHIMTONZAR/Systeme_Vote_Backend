@@ -1,5 +1,6 @@
 
 let express = require('express');
+
 var app = express();
 let path = require('path');
 app.use(express.json());
@@ -12,12 +13,13 @@ let autroutes = require('./routes/auth.routes');
  let sondageRoutes = require('./routes/sondageRoutes');
  let voteRoutes = require('./routes/voteRoutes');
   let dashboardRoutes = require('./routes/dashboardRoutes');
-
+  let userRoutes=require('./routes/userRoutes')
 app.use('/', indexRouter);
 app.use('/users', autroutes);
 app.use('/sondage', sondageRoutes);
 app.use('/vote', voteRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/user',userRoutes);
 app.listen(3001, () => {
   console.log('Example app listening on port 3001!')
 })

@@ -3,7 +3,7 @@ const db =require("../db/db.js");
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
-  auth: {
+  auth: { 
     user: "belaoualiali1@gmail.com",
     pass: "jnvb whlb lmao ifwl", 
   },

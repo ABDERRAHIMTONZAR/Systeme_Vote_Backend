@@ -1,20 +1,19 @@
-import nodemailer from "nodemailer";
-import db from "../db/db.js";
+const nodemailer =require("nodemailer");
+const db =require("../db/db.js");
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: "belaoualiali1@gmail.com",
-    pass: "jnvb whlb lmao ifwl", // pas ton vrai mdp
+    pass: "jnvb whlb lmao ifwl", 
   },
-});
-
-export const notifyVoters = async (Id_Sondage) => {
+}); 
+ 
+exports.notifyVoters = async (Id_Sondage) => {
   try {
-    // IMPORTANT → utiliser db.promise()
     const [voters] = await db.promise().query(
-      `SELECT u.Email, u.Nom 
-       FROM votes v 
+      `SELECT u.Email, u.Nom    
+       FROM votes v,  
        JOIN utilisateur u ON v.Id_user = u.Id_user 
        WHERE v.Id_Sondage = ?`,
       [Id_Sondage]

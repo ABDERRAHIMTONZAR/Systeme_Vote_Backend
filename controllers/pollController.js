@@ -58,7 +58,7 @@ exports.getUnvotedPolls = (req, res) => {
         WHERE V.Id_Sondage = S.Id_Sondage
       ) AS voters
     FROM sondages S
-    WHERE S.Id_Sondage NOT IN (
+    WHERE S.Etat="Actif" and S.Id_Sondage NOT IN (
       SELECT Id_Sondage FROM votes WHERE Id_user = ?
     )
   `;

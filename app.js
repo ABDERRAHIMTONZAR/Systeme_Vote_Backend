@@ -1,28 +1,60 @@
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const path = require("path");
+const cors = require("cors");
 
-let express = require('express');
+const app = express();
 
-var app = express();
-let path = require('path');
+// ===== Middleware =====
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(express.static(path.join(__dirname, 'public')));
-const cors = require('cors');
-app.use(cors());
-let indexRouter = require('./routes/index');
-let autroutes = require('./routes/auth.routes');
- let sondageRoutes = require('./routes/sondageRoutes');
- let voteRoutes = require('./routes/voteRoutes');
-  let dashboardRoutes = require('./routes/dashboardRoutes');
-  let userRoutes=require('./routes/userRoutes')
-app.use('/', indexRouter);
-app.use('/users', autroutes);
-app.use('/sondage', sondageRoutes);
-app.use('/vote', voteRoutes);
-app.use('/dashboard', dashboardRoutes);
-app.use('/user',userRoutes);
-app.listen(3001, () => {
-  console.log('Example app listening on port 3001!')
-})
- 
- 
-module.exports = app;  
+app.use(express.static(path.join(__dirname, "public")));
+
+// ===== Routes =====
+let indexRouter = require("./routes/index");
+let autroutes = require("./routes/auth.routes");
+let sondageRoutes = require("./routes/sondageRoutes");
+let voteRoutes = require("./routes/voteRoutes");
+let dashboardRoutes = require("./routes/dashboardRoutes");
+let userRoutes = require("./routes/userRoutes");
+
+app.use("/", indexRouter);
+app.use("/users", autroutes);
+app.use("/sondage", sondageRoutes);
+app.use("/vote", voteRoutes);
+app.use("/dashboard", dashboardRoutes);
+app.use("/user", userRoutes);
+
+// HTTP SERVER + SOCKET.IO 
+const server = http.createServer(app);
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3002",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3002",
+];
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins, // front React
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  },
+});
+
+app.set("io", io);
+
+// SOCKET EVENTS
+io.on("connection", (socket) => {
+  console.log("✅ Client connecté :", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("❌ Client déconnecté :", socket.id);
+  });
+});
+
+server.listen(3001, () => {
+  console.log("🚀 API + Socket.IO running on port 3001");
+});
+
+module.exports = app;

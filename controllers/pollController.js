@@ -3,46 +3,40 @@ exports.getVotedPolls = (req, res) => {
   const userId = req.userId;
   const categorie = req.query.categorie;
 
+  const params = [userId]; 
+
   let sql = `
     SELECT 
       S.Id_Sondage AS id,
       S.question,
       S.End_time AS end_time,
-      S.Etat AS state,
+      S.Etat AS Etat,          
       S.Id_user AS user_id,
       S.categorie AS categorie,
-      (
-        SELECT COUNT(*) 
-        FROM votes V2 
-        WHERE V2.Id_Sondage = S.Id_Sondage
-      ) AS voters
+      (SELECT COUNT(*) FROM votes V2 WHERE V2.Id_Sondage = S.Id_Sondage) AS voters
     FROM sondages S
-    JOIN votes V ON S.Id_Sondage = V.Id_Sondage
-    WHERE V.Id_user = ?
+    WHERE S.Id_Sondage IN (
+      SELECT Id_Sondage FROM votes WHERE Id_user = ?
+    )
   `;
 
-  const params = [userId];
-
-  // Filtrer par catégorie si fournie
   if (categorie) {
-    sql += ` AND S.categorie = ? `;
+    sql += ` AND S.categorie = ?`;
     params.push(categorie);
   }
 
-  sql += ` GROUP BY S.Id_Sondage ORDER BY S.Id_Sondage DESC`;
+  sql += ` ORDER BY S.Id_Sondage DESC`;
 
   db.query(sql, params, (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json(err);
-    }
+    if (err) return res.status(500).json(err);
     return res.status(200).json(result);
   });
 };
 
+
 exports.getUnvotedPolls = (req, res) => {
   const userId = req.userId;
-  const categorie = req.query.categorie; // récupère la catégorie si envoyée
+  const categorie = req.query.categorie; 
 
   let sql = `
     SELECT 
@@ -65,7 +59,6 @@ exports.getUnvotedPolls = (req, res) => {
 
   const params = [userId];
 
-  // 👉 Si une catégorie est fournie, ajoute le filtre SQL
   if (categorie) {
     sql += ` AND S.categorie = ? `;
     params.push(categorie);
@@ -108,7 +101,6 @@ const { notifyVoters } = require("./notifyVoters");
 
 
 exports.autoFinishSondages = (req, res) => {
-  // Étape 1 : récupérer tous les sondages qui sont terminés mais pas encore 'finished'
   const selectSql = `
     SELECT Id_Sondage 
     FROM sondages 
@@ -127,12 +119,10 @@ exports.autoFinishSondages = (req, res) => {
     }
 
     try {
-      // Pour chaque sondage, notifier les votants
       for (const row of results) {
         await notifyVoters(row.Id_Sondage);
       }
 
-      // Étape 2 : mettre à jour l'état des sondages
       const updateSql = `
         UPDATE sondages
         SET Etat = 'finished'

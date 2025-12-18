@@ -1,7 +1,6 @@
 const db = require("../db/db");
 const { notifyVoters } = require("./notifyVoters");
 
-// ✅ Utilitaire pour éviter NOT IN (problèmes si NULL) => on utilise NOT EXISTS
 const baseSelect = `
   SELECT
     S.Id_Sondage AS id,
@@ -27,7 +26,7 @@ exports.getVotedPolls = (req, res) => {
     )
   `;
 
-  if (categorie) {
+  if (categorie && categorie !== "All") {
     sql += ` AND S.categorie = ?`;
     params.push(categorie);
   }
@@ -53,7 +52,7 @@ exports.getUnvotedPolls = (req, res) => {
     )
   `;
 
-  if (categorie) {
+  if (categorie && categorie !== "All") {
     sql += ` AND S.categorie = ?`;
     params.push(categorie);
   }
@@ -90,47 +89,59 @@ exports.getPollResults = (req, res) => {
   });
 };
 
-// ✅ IMPORTANT: cette route doit être appelée régulièrement (front ou cron)
-exports.autoFinishSondages = (req, res) => {
-  const selectSql = `
-    SELECT Id_Sondage
-    FROM sondages
-    WHERE End_time <= NOW()
-      AND Etat != 'finished'
-  `;
+// ✅ NEW: auto-finish réutilisable (timer serveur + route)
+exports.runAutoFinish = (io) => {
+  return new Promise((resolve, reject) => {
+    const selectSql = `
+      SELECT Id_Sondage
+      FROM sondages
+      WHERE End_time <= NOW()
+        AND Etat != 'finished'
+    `;
 
-  db.query(selectSql, async (err, results) => {
-    if (err) return res.status(500).json({ message: "Erreur serveur" });
+    db.query(selectSql, async (err, results) => {
+      if (err) return reject(err);
 
-    if (!results || results.length === 0) {
-      return res.json({ message: "Aucun sondage à terminer", updated: 0 });
-    }
-
-    try {
-      // notifier avant update
-      for (const row of results) {
-        await notifyVoters(row.Id_Sondage);
+      if (!results || results.length === 0) {
+        return resolve(0);
       }
 
-      const updateSql = `
-        UPDATE sondages
-        SET Etat = 'finished'
-        WHERE End_time <= NOW()
-          AND Etat != 'finished'
-      `;
+      try {
+        for (const row of results) {
+          await notifyVoters(row.Id_Sondage);
+        }
 
-      db.query(updateSql, (err2, result2) => {
-        if (err2) return res.status(500).json({ message: "Erreur serveur" });
+        const updateSql = `
+          UPDATE sondages
+          SET Etat = 'finished'
+          WHERE End_time <= NOW()
+            AND Etat != 'finished'
+        `;
 
-        return res.json({
-          message: "Mise à jour automatique effectuée et votants notifiés",
-          updated: result2.affectedRows,
+        db.query(updateSql, (err2, result2) => {
+          if (err2) return reject(err2);
+
+          // ✅ emit realtime
+          if (io) io.emit("polls:changed");
+
+          resolve(result2.affectedRows || 0);
         });
-      });
-    } catch (error) {
-      return res.status(500).json({ message: "Erreur lors de l'envoi des emails" });
-    }
+      } catch (error) {
+        reject(error);
+      }
+    });
   });
+};
+
+// ✅ route HTTP (optionnelle, debug)
+exports.autoFinishSondages = async (req, res) => {
+  try {
+    const io = req.app.get("io");
+    const updated = await exports.runAutoFinish(io);
+    res.json({ message: "ok", updated });
+  } catch (e) {
+    res.status(500).json({ message: "Erreur serveur", error: e.message });
+  }
 };
 
 exports.getSondageById = (req, res) => {

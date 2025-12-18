@@ -1,25 +1,37 @@
 const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
 const path = require("path");
 const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
+
+// routes
+const indexRouter = require("./routes/index");
+const autroutes = require("./routes/auth.routes");
+const sondageRoutes = require("./routes/sondageRoutes");
+const voteRoutes = require("./routes/voteRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const userRoutes = require("./routes/userRoutes");
+
+// controller timer
+const pollCtrl = require("./controllers/pollController");
 
 const app = express();
 
-// ===== Middleware =====
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// ===== Routes =====
-let indexRouter = require("./routes/index");
-let autroutes = require("./routes/auth.routes");
-let sondageRoutes = require("./routes/sondageRoutes");
-let voteRoutes = require("./routes/voteRoutes");
-let dashboardRoutes = require("./routes/dashboardRoutes");
-let userRoutes = require("./routes/userRoutes");
+// ✅ CORS (adapte selon ton port front)
+app.use(
+  cors({
+    origin: ["http://localhost:3000", "http://localhost:3002"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
+// routes
 app.use("/", indexRouter);
 app.use("/users", autroutes);
 app.use("/sondage", sondageRoutes);
@@ -27,34 +39,37 @@ app.use("/vote", voteRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/user", userRoutes);
 
-// HTTP SERVER + SOCKET.IO 
+// ✅ server + socket
 const server = http.createServer(app);
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3002",
-  "http://127.0.0.1:3000",
-  "http://127.0.0.1:3002",
-];
+
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins, // front React
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: ["http://localhost:3000", "http://localhost:3002"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   },
+});
+
+io.on("connection", (socket) => {
+  console.log("✅ Socket connecté:", socket.id);
 });
 
 app.set("io", io);
 
-// SOCKET EVENTS
-io.on("connection", (socket) => {
-  console.log("✅ Client connecté :", socket.id);
-
-  socket.on("disconnect", () => {
-    console.log("❌ Client déconnecté :", socket.id);
-  });
-});
-
+// ✅ auto-finish côté serveur (toutes les 60s)
+setInterval(async () => {
+  try {
+    const updated = await pollCtrl.runAutoFinish(io);
+    if (updated > 0) {
+      console.log("✅ auto-finish updated:", updated);
+    }
+  } catch (e) {
+    console.log("❌ auto-finish error:", e.message);
+  }
+}, 60_000);
+ 
 server.listen(3001, () => {
-  console.log("🚀 API + Socket.IO running on port 3001");
+  console.log("🚀 Server listening on port 3001");
 });
 
 module.exports = app;

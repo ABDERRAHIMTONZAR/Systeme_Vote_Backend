@@ -107,9 +107,6 @@ exports.runAutoFinish = (io) => {
       }
 
       try {
-        for (const row of results) {
-          await notifyVoters(row.Id_Sondage);
-        }
 
         const updateSql = `
           UPDATE sondages
@@ -121,9 +118,11 @@ exports.runAutoFinish = (io) => {
         db.query(updateSql, (err2, result2) => {
           if (err2) return reject(err2);
 
-          // ✅ emit realtime
           if (io) io.emit("polls:changed");
 
+          for (const sondage of results) {
+             Promise.all(results.map(s => notifyVoters(s.Id_Sondage)));
+          }
           resolve(result2.affectedRows || 0);
         });
       } catch (error) {
@@ -136,6 +135,7 @@ exports.runAutoFinish = (io) => {
 // ✅ route HTTP (optionnelle, debug)
 exports.autoFinishSondages = async (req, res) => {
   try {
+
     const io = req.app.get("io");
     const updated = await exports.runAutoFinish(io);
     res.json({ message: "ok", updated });

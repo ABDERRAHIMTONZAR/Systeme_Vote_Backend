@@ -13,7 +13,7 @@ exports.notifyVoters = async (Id_Sondage) => {
   try {
     const [voters] = await db.promise().query(
       `SELECT u.Email, u.Nom    
-       FROM votes v,  
+       FROM votes v 
        JOIN utilisateur u ON v.Id_user = u.Id_user 
        WHERE v.Id_Sondage = ?`,
       [Id_Sondage]

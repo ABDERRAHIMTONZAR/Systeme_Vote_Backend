@@ -136,22 +136,25 @@ exports.getVoterEngagementDistribution = (req, res) => {
 // 5) CREATE POLL (VERSION CALLBACKS)
 // -------------------------
 exports.createPoll = (req, res) => {
-    console.log(req.body);
-  const { question, categorie, durationHours, durationMinutes, options } = req.body;
+  console.log("BODY REÇU :", req.body);
 
-  if (!question || !categorie || !options || options.length < 2) {
+  const { question, categorie, endDateTime, options } = req.body;
+
+  if (!question || !categorie || !endDateTime || !options || options.length < 2) {
     return res.status(400).json({ message: "Champs manquants." });
   }
 
   const userId = req.userId;
 
-  const now = new Date();
-  const endTime = new Date(now.getTime() + durationHours * 3600000 + durationMinutes * 60000);
+  const endTime = new Date(endDateTime);
 
-  // === 1) INSÉRER LE SONDAGE ===
+  if (isNaN(endTime.getTime())) {
+    return res.status(400).json({ message: "Date de fin invalide." });
+  }
+
   const pollSQL = `
-      INSERT INTO sondages (question, End_time, Etat, Id_user, Categorie)
-      VALUES (?, ?, 'Actif', ?, ?)
+    INSERT INTO sondages (question, End_time, Etat, Id_user, Categorie)
+    VALUES (?, ?, 'Actif', ?, ?)
   `;
 
   db.query(pollSQL, [question, endTime, userId, categorie], (err, pollResult) => {
@@ -162,12 +165,11 @@ exports.createPoll = (req, res) => {
 
     const pollId = pollResult.insertId;
 
-    // === 2) INSÉRER LES OPTIONS ===
     const values = options.map(opt => [opt, pollId]);
 
     const optionSQL = `
-        INSERT INTO optionssondage (option_text, id_sondage)
-        VALUES ?
+      INSERT INTO optionssondage (option_text, id_sondage)
+      VALUES ?
     `;
 
     db.query(optionSQL, [values], (err2) => {
@@ -178,11 +180,12 @@ exports.createPoll = (req, res) => {
 
       res.status(201).json({
         message: "Poll créé avec succès",
-        pollId,
+        pollId
       });
     });
   });
 };
+
 
 
 exports.getAllPolls = (req, res) => {

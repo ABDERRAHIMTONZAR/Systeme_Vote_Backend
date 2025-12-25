@@ -1,21 +1,19 @@
-const db =require("../db/db.js");
+const db = require("../db/db.js");
 
-// -------------------------
-// 1) Dashboard Stats
-// -------------------------
+
 exports.getDashboardStats = (req, res) => {
   const userId = req.userId;
 
   const sql = `
-        SELECT 
-            (SELECT COUNT(*) FROM sondages WHERE Id_user = ?) AS total_polls,
-            (SELECT COUNT(*) FROM sondages WHERE Id_user = ? AND Etat = 'Actif') AS active_polls,
-            (SELECT COUNT(*) FROM sondages WHERE Id_user = ? AND Etat = 'finished') AS finished_polls,
-            (SELECT COUNT(DISTINCT V.Id_user)
-             FROM votes V
-             JOIN sondages S ON V.Id_Sondage = S.Id_Sondage
-             WHERE S.Id_user = ?) AS total_unique_voters
-    `;
+    SELECT 
+      (SELECT COUNT(*) FROM sondages WHERE Id_user = ?) AS total_polls,
+      (SELECT COUNT(*) FROM sondages WHERE Id_user = ? AND Etat = 'Actif') AS active_polls,
+      (SELECT COUNT(*) FROM sondages WHERE Id_user = ? AND Etat = 'finished') AS finished_polls,
+      (SELECT COUNT(DISTINCT V.Id_user)
+        FROM votes V
+        JOIN sondages S ON V.Id_Sondage = S.Id_Sondage
+        WHERE S.Id_user = ?) AS total_unique_voters
+  `;
 
   db.query(sql, [userId, userId, userId, userId], (err, results) => {
     if (err) {
@@ -24,7 +22,6 @@ exports.getDashboardStats = (req, res) => {
     }
 
     const stats = results[0];
-    console.log(results)
     return res.status(200).json({
       total_polls: stats.total_polls,
       active_polls: stats.active_polls,
@@ -34,39 +31,34 @@ exports.getDashboardStats = (req, res) => {
   });
 };
 
-// -------------------------
-// 2) Monthly Stats
-// -------------------------
+
 exports.getMonthlyStats = (req, res) => {
   const userId = req.userId;
 
   const sql = `
-        SELECT 
-            MONTH(S.date_creation) AS month,
-            COUNT(S.Id_Sondage) AS polls,
-            (
-                SELECT COUNT(DISTINCT V.Id_user)
-                FROM votes V
-                WHERE V.Id_Sondage IN (
-                    SELECT Id_Sondage 
-                    FROM sondages 
-                    WHERE Id_user = ?
-                )
-                AND MONTH(V.date_vote) = MONTH(S.date_creation)
-            ) AS visitors
-        FROM sondages S
-        WHERE S.Id_user = ?
-        GROUP BY MONTH(S.date_creation)
-        ORDER BY MONTH(S.date_creation);
-    `;
+    SELECT 
+      MONTH(S.date_creation) AS month,
+      COUNT(S.Id_Sondage) AS polls,
+      (
+        SELECT COUNT(DISTINCT V.Id_user)
+        FROM votes V
+        WHERE V.Id_Sondage IN (
+          SELECT Id_Sondage 
+          FROM sondages 
+          WHERE Id_user = ?
+        )
+        AND MONTH(V.date_vote) = MONTH(S.date_creation)
+      ) AS visitors
+    FROM sondages S
+    WHERE S.Id_user = ?
+    GROUP BY MONTH(S.date_creation)
+    ORDER BY MONTH(S.date_creation);
+  `;
 
   db.query(sql, [userId, userId], (err, results) => {
     if (err) return res.status(500).json(err);
 
-    const months = [
-      "Jan","Feb","Mar","Apr","May","Jun",
-      "Jul","Aug","Sep","Oct","Nov","Dec"
-    ];
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
     const finalData = months.map((m) => ({
       month: m,
@@ -84,19 +76,17 @@ exports.getMonthlyStats = (req, res) => {
   });
 };
 
-// -------------------------
-// 3) Poll Status Distribution
-// -------------------------
+
 exports.getPollStatusDistribution = (req, res) => {
   const userId = req.userId;
 
   const sql = `
-        SELECT
-            SUM(CASE WHEN Etat = 'Actif' THEN 1 ELSE 0 END) AS active,
-            SUM(CASE WHEN Etat = 'finished' THEN 1 ELSE 0 END) AS finished
-        FROM sondages
-        WHERE Id_user = ?
-    `;
+    SELECT
+      SUM(CASE WHEN Etat = 'Actif' THEN 1 ELSE 0 END) AS active,
+      SUM(CASE WHEN Etat = 'finished' THEN 1 ELSE 0 END) AS finished
+    FROM sondages
+    WHERE Id_user = ?
+  `;
 
   db.query(sql, [userId], (err, result) => {
     if (err) return res.status(500).json(err);
@@ -104,18 +94,16 @@ exports.getPollStatusDistribution = (req, res) => {
   });
 };
 
-// -------------------------
-// 4) Voter Engagement
-// -------------------------
+
 exports.getVoterEngagementDistribution = (req, res) => {
   const userId = req.userId;
 
   const sql = `
-        SELECT Id_user, COUNT(*) AS votes
-        FROM votes
-        WHERE Id_Sondage IN (SELECT Id_Sondage FROM sondages WHERE Id_user = ?)
-        GROUP BY Id_user
-    `;
+    SELECT Id_user, COUNT(*) AS votes
+    FROM votes
+    WHERE Id_Sondage IN (SELECT Id_Sondage FROM sondages WHERE Id_user = ?)
+    GROUP BY Id_user
+  `;
 
   db.query(sql, [userId], (err, rows) => {
     if (err) return res.status(500).json(err);
@@ -132,9 +120,7 @@ exports.getVoterEngagementDistribution = (req, res) => {
   });
 };
 
-// -------------------------
-// 5) CREATE POLL (VERSION CALLBACKS)
-// -------------------------
+
 exports.createPoll = (req, res) => {
   console.log("BODY REÇU :", req.body);
 
@@ -145,7 +131,6 @@ exports.createPoll = (req, res) => {
   }
 
   const userId = req.userId;
-
   const endTime = new Date(endDateTime);
 
   if (isNaN(endTime.getTime())) {
@@ -164,7 +149,6 @@ exports.createPoll = (req, res) => {
     }
 
     const pollId = pollResult.insertId;
-
     const values = options.map(opt => [opt, pollId]);
 
     const optionSQL = `
@@ -178,6 +162,10 @@ exports.createPoll = (req, res) => {
         return res.status(500).json({ message: "Erreur serveur." });
       }
 
+      // ✅ SOCKET : informer les clients que la liste des polls a changé
+      const io = req.app.get("io");
+      if (io) io.emit("polls:changed");
+
       res.status(201).json({
         message: "Poll créé avec succès",
         pollId
@@ -187,21 +175,20 @@ exports.createPoll = (req, res) => {
 };
 
 
-
 exports.getAllPolls = (req, res) => {
   const userId = req.userId;
 
   const sql = `
-SELECT 
-  Id_Sondage,
-  question,
-  Categorie,
-  Etat,
-  date_creation,
-  End_time
-FROM sondages
-WHERE Id_user = ?
-ORDER BY date_creation DESC
+    SELECT 
+      Id_Sondage,
+      question,
+      Categorie,
+      Etat,
+      date_creation,
+      End_time
+    FROM sondages
+    WHERE Id_user = ?
+    ORDER BY date_creation DESC
   `;
 
   db.query(sql, [userId], (err, results) => {
@@ -215,7 +202,7 @@ ORDER BY date_creation DESC
       return {
         id: poll.Id_Sondage,
         question: poll.question,
-        category: poll.Categorie,  
+        category: poll.Categorie,
         createdOn: created.toISOString().split("T")[0],
         endsOn: end.toISOString().split("T")[0],
         status: end > now ? "Active" : "Ended"
@@ -256,6 +243,10 @@ exports.updatePoll = (req, res) => {
     db.query(sql, [question, Categorie, End_time, id], (err2) => {
       if (err2) return res.status(500).json(err2);
 
+      // ✅ SOCKET
+      const io = req.app.get("io");
+      if (io) io.emit("polls:changed");
+
       res.json({ message: "Sondage mis à jour avec succès !" });
     });
   });
@@ -285,11 +276,12 @@ exports.deletePoll = (req, res) => {
         db.query(deletePollSQL, [pollId], (err4) => {
           if (err4) return res.status(500).json(err4);
 
+          const io = req.app.get("io");
+          if (io) io.emit("polls:changed");
+
           res.json({ message: "Sondage supprimé avec succès." });
         });
       });
     });
   });
 };
-
-

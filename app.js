@@ -39,7 +39,6 @@ app.use("/vote", voteRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/user", userRoutes);
 
-// ✅ server + socket
 const server = http.createServer(app);
 
 const io = new Server(server, {

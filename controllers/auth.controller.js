@@ -31,48 +31,101 @@ exports.createUser = async (req, res) => {
 };
 
 
+
+const { sendOtpMail } = require("./CodeLoginMailer");
+
 exports.loginUser = (req, res) => {
-    const { email, password } = req.body;
-console.log("CODE LOGIN OK", req.body);
-    if (!email || !password) {
-        console.log("Les champs sont vides");
-        return res.status(400).json({ message: "Les champs sont vides" });
-    } 
+  const { email, password } = req.body;
 
-    const sql = "SELECT * FROM utilisateur WHERE email = ?";
+  const sql = "SELECT * FROM utilisateur WHERE email = ?";
+  db.query(sql, [email], async (err, result) => {
+    if (err) return res.status(500).json({ message: "Erreur serveur" });
+    if (result.length === 0)
+      return res.status(400).json({ message: "Email introuvable" });
 
-    db.query(sql, [email], async (err, result) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ message: "Erreur serveur", error: err });
-        }
+    const user = result[0];
+    const correct = await bcrypt.compare(password, user.password);
+    if (!correct)
+      return res.status(400).json({ message: "Mot de passe incorrect" });
 
-        if (result.length === 0) {
-            console.log("Email introuvable");
-            return res.status(400).json({ message: "Email introuvable" });
-        }
+    // 🔢 Génération OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
 
-        const user = result[0]; 
- console.log("USER FROM DB =", user);
-       const correct = await bcrypt.compare(password, user.password);
-        if (!correct) {
-            console.log("Mot de passe incorrect");
-            return res.status(400).json({ message: "Mot de passe incorrect" });
-        }
+    await db.promise().query(
+      "INSERT INTO user_otp(user_id, otp, expires_at) VALUES (?, ?, ?)",
+      [user.Id_user, otp, expires]
+    );
 
-        const token = jwt.sign(
-            {
-                id: user.Id_user,
-                nom: user.Nom,
-                prenom: user.Prenom
-            },
-            "SECRET_KEY",
-            { expiresIn: "2h" }
-        );
-        console.log("TOKEN =", token);
-        return res.status(200).json({
-            message: "Authentification réussie",
-            token: token
-        }); 
-    });  
+    // ✉️ Envoi email
+    await sendOtpMail(user.Email, user.Nom, otp);
+
+    // 🔑 Token temporaire
+    const preAuthToken = jwt.sign(
+      { userId: user.Id_user },
+      "SECRET_KEY",
+      { expiresIn: "5m" }
+    );
+
+    return res.json({
+      requires2fa: true,
+      preAuthToken,
+    });
+  });
+};
+exports.verify2fa = (req, res) => {
+  const { code, preAuthToken } = req.body;
+
+  try {
+    const decoded = jwt.verify(preAuthToken, "SECRET_KEY");
+
+    const sql = `
+      SELECT * FROM user_otp
+      WHERE user_id = ? AND otp = ? AND used = 0 AND expires_at > NOW()
+    `;
+
+    db.query(sql, [decoded.userId, code], (err, rows) => {
+      if (err) return res.status(500).json({ message: "Erreur serveur" });
+      if (rows.length === 0)
+        return res.status(400).json({ message: "Code invalide ou expiré" });
+
+      db.query("UPDATE user_otp SET used = 1 WHERE id = ?", [rows[0].id]);
+
+      const token = jwt.sign(
+        { id: decoded.userId },
+        "SECRET_KEY",
+        { expiresIn: "2h" }
+      );
+
+      res.json({ token });
+    });
+  } catch {
+    res.status(401).json({ message: "Session expirée" });
+  }
+};
+exports.resend2fa = async (req, res) => {
+  const { preAuthToken } = req.body;
+
+  try {
+    const decoded = jwt.verify(preAuthToken, "SECRET_KEY");
+
+    const [user] = await db.promise().query(
+      "SELECT Email, Nom FROM utilisateur WHERE Id_user = ?",
+      [decoded.userId]
+    );
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 5 * 60000);
+
+    await db.promise().query(
+      "INSERT INTO user_otp(user_id, otp, expires_at) VALUES (?, ?, ?)",
+      [decoded.userId, otp, expires]
+    );
+
+    await sendOtpMail(user[0].Email, user[0].Nom, otp);
+
+    res.json({ message: "Code renvoyé avec succès" });
+  } catch {
+    res.status(401).json({ message: "Session expirée" });
+  }
 };

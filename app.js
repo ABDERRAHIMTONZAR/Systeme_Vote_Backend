@@ -1,10 +1,7 @@
 const express = require("express");
 const path = require("path");
-const http = require("http");
-const cors = require("cors");
-const { Server } = require("socket.io");
 
-// ✅ DB (dans dossier db/)
+// DB (pool mysql2/promise) - dossier db/
 const db = require("./db/db");
 
 // routes
@@ -15,23 +12,21 @@ const voteRoutes = require("./routes/voteRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const userRoutes = require("./routes/userRoutes");
 
-// controller
+// controller auto-finish
 const pollCtrl = require("./controllers/pollController");
 
 const app = express();
 
-/* =========================
-   Middleware de base
-========================= */
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, "public")));
 
 /* =========================
    CORS (LOCAL + VERCEL)
+   -> pour HTTP (axios/fetch)
 ========================= */
 const allowed = (origin) => {
-  if (!origin) return true; // Postman / curl
+  if (!origin) return true; // Postman/curl
   if (origin === "http://localhost:3000") return true;
   if (origin === "http://localhost:3002") return true;
   if (/^https:\/\/systeme-vote-frontend-.*\.vercel\.app$/.test(origin)) return true;
@@ -56,23 +51,10 @@ app.use((req, res, next) => {
 });
 
 /* =========================
-   ROUTES
-========================= */
-app.use("/", indexRouter);
-app.use("/users", authRoutes);
-app.use("/sondage", sondageRoutes);
-app.use("/vote", voteRoutes);
-app.use("/dashboard", dashboardRoutes);
-app.use("/user", userRoutes);
-
-/* =========================
-   HEALTH CHECK (KOYEB)
+   HEALTH + DB TEST
 ========================= */
 app.get("/health", (req, res) => res.status(200).send("ok"));
 
-/* =========================
-   DB TEST
-========================= */
 app.get("/db-test", async (req, res) => {
   try {
     const [rows] = await db.query("SELECT 1 AS ok");
@@ -83,44 +65,27 @@ app.get("/db-test", async (req, res) => {
 });
 
 /* =========================
-   SERVER + SOCKET.IO
+   ROUTES
 ========================= */
-const server = http.createServer(app);
-
-const io = new Server(server, {
-  cors: {
-    origin: allowed,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  },
-});
-
-io.on("connection", (socket) => {
-  console.log("✅ Socket connecté:", socket.id);
-});
-
-app.set("io", io);
+app.use("/", indexRouter);
+app.use("/users", authRoutes);
+app.use("/sondage", sondageRoutes);
+app.use("/vote", voteRoutes);
+app.use("/dashboard", dashboardRoutes);
+app.use("/user", userRoutes);
 
 /* =========================
-   AUTO-FINISH (CRON)
+   AUTO-FINISH (toutes 60s)
+   -> récupère io via app.get("io")
 ========================= */
 setInterval(async () => {
   try {
+    const io = app.get("io"); // ✅ défini dans bin/www
     const updated = await pollCtrl.runAutoFinish(io);
-    if (updated > 0) {
-      console.log("✅ auto-finish updated:", updated);
-    }
+    if (updated > 0) console.log("✅ auto-finish updated:", updated);
   } catch (e) {
     console.log("❌ auto-finish error:", e.message);
   }
 }, 60_000);
-
-/* =========================
-   START SERVER
-========================= */
-const PORT = process.env.PORT || 8000;
-server.listen(PORT, () => {
-  console.log("🚀 Server listening on port", PORT);
-});
 
 module.exports = app;

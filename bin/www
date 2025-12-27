@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
+/**
+ * Module dependencies.
+ */
+
 var app = require("../app");
 var debug = require("debug")("backend:server");
 var http = require("http");
 const { Server } = require("socket.io");
-
-// controller timer
-const pollCtrl = require("../controllers/pollController");
 
 /**
  * Get port from environment and store in Express.
@@ -19,17 +20,21 @@ app.set("port", port);
  */
 var server = http.createServer(app);
 
-/**
- * ✅ Socket.IO attaché AU MÊME server
- */
+/* =========================
+   Socket.IO (CORS identique)
+========================= */
+const allowed = (origin) => {
+  if (!origin) return true;
+  if (origin === "http://localhost:3000") return true;
+  if (origin === "http://localhost:3002") return true;
+  if (/^https:\/\/systeme-vote-frontend-.*\.vercel\.app$/.test(origin)) return true;
+  return false;
+};
+
 const io = new Server(server, {
   cors: {
     origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      if (origin === "http://localhost:3000") return cb(null, true);
-      if (origin === "http://localhost:3002") return cb(null, true);
-      if (/^https:\/\/systeme-vote-frontend-.*\.vercel\.app$/.test(origin))
-        return cb(null, true);
+      if (allowed(origin)) return cb(null, true);
       return cb(new Error("Socket CORS blocked: " + origin));
     },
     credentials: true,
@@ -41,20 +46,8 @@ io.on("connection", (socket) => {
   console.log("✅ Socket connecté:", socket.id);
 });
 
-// rendre io accessible dans routes via req.app.get("io")
+// ✅ rendre io accessible partout (req.app.get("io") ou app.get("io"))
 app.set("io", io);
-
-/**
- * ✅ auto-finish toutes les 60s (ici, pas dans app.js)
- */
-setInterval(async () => {
-  try {
-    const updated = await pollCtrl.runAutoFinish(io);
-    if (updated > 0) console.log("✅ auto-finish updated:", updated);
-  } catch (e) {
-    console.log("❌ auto-finish error:", e.message);
-  }
-}, 60_000);
 
 /**
  * Listen on provided port, on all network interfaces.
@@ -63,32 +56,53 @@ server.listen(port);
 server.on("error", onError);
 server.on("listening", onListening);
 
+/**
+ * Normalize a port into a number, string, or false.
+ */
 function normalizePort(val) {
   var port = parseInt(val, 10);
-  if (isNaN(port)) return val;
-  if (port >= 0) return port;
+
+  if (isNaN(port)) {
+    return val;
+  }
+
+  if (port >= 0) {
+    return port;
+  }
+
   return false;
 }
 
+/**
+ * Event listener for HTTP server "error" event.
+ */
 function onError(error) {
-  if (error.syscall !== "listen") throw error;
+  if (error.syscall !== "listen") {
+    throw error;
+  }
+
   var bind = typeof port === "string" ? "Pipe " + port : "Port " + port;
 
   switch (error.code) {
     case "EACCES":
       console.error(bind + " requires elevated privileges");
       process.exit(1);
+      break;
     case "EADDRINUSE":
       console.error(bind + " is already in use");
       process.exit(1);
+      break;
     default:
       throw error;
   }
 }
 
+/**
+ * Event listener for HTTP server "listening" event.
+ */
 function onListening() {
   var addr = server.address();
   var bind = typeof addr === "string" ? "pipe " + addr : "port " + addr.port;
   debug("Listening on " + bind);
-  console.log("🚀 Server listening on " + bind);
+  console.log("🚀 Server listening on port", port);
 }

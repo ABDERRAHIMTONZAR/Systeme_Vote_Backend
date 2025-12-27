@@ -90,52 +90,44 @@ exports.getPollResults = (req, res) => {
 };
 
 // ✅ NEW: auto-finish réutilisable (timer serveur + route)
-exports.runAutoFinish = (io) => {
-  return new Promise((resolve, reject) => {
-    const selectSql = `
-      SELECT Id_Sondage
-      FROM sondages
-      WHERE End_time <= NOW()
-        AND Etat != 'finished'
-    `;
+exports.runAutoFinish = async (io) => {
+  // 1) récupérer les sondages à terminer
+  const selectSql = `
+    SELECT Id_Sondage
+    FROM sondages
+    WHERE End_time <= NOW()
+      AND Etat != 'finished'
+  `;
 
-    db.query(selectSql, async (err, results) => {
-      if (err) return reject(err);
+  const [results] = await db.query(selectSql);
 
-      if (!results || results.length === 0) {
-        return resolve(0);
-      }
+  if (!results || results.length === 0) {
+    return 0;
+  }
 
-      try {
+  // 2) passer en finished
+  const updateSql = `
+    UPDATE sondages
+    SET Etat = 'finished'
+    WHERE End_time <= NOW()
+      AND Etat != 'finished'
+  `;
 
-        const updateSql = `
-          UPDATE sondages
-          SET Etat = 'finished'
-          WHERE End_time <= NOW()
-            AND Etat != 'finished'
-        `;
+  const [result2] = await db.query(updateSql);
 
-        db.query(updateSql, (err2, result2) => {
-          if (err2) return reject(err2);
+  // 3) notifier front via socket
+  if (io) io.emit("polls:changed");
 
-          if (io) io.emit("polls:changed");
+  // 4) notifier les votants (IMPORTANT: await)
+  // ⚠️ Ton code avait un for + Promise.all inutile; on fait juste Promise.all une fois
+  await Promise.all(results.map((s) => notifyVoters(s.Id_Sondage)));
 
-          for (const sondage of results) {
-             Promise.all(results.map(s => notifyVoters(s.Id_Sondage)));
-          }
-          resolve(result2.affectedRows || 0);
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
+  return result2.affectedRows || 0;
 };
 
 // ✅ route HTTP (optionnelle, debug)
 exports.autoFinishSondages = async (req, res) => {
   try {
-
     const io = req.app.get("io");
     const updated = await exports.runAutoFinish(io);
     res.json({ message: "ok", updated });
@@ -143,7 +135,6 @@ exports.autoFinishSondages = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur", error: e.message });
   }
 };
-
 exports.getSondageById = (req, res) => {
   const id_sondage = req.params.id_sondage;
   const sql = "SELECT * FROM sondages WHERE Id_Sondage = ?";

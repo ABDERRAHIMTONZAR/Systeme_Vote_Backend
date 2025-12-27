@@ -29,7 +29,7 @@ app.use(express.static(path.join(__dirname, "public")));
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3002",
-  "https://systeme-vote-frontend-zll4.vercel.app",
+  "https://systeme-vote-frontend-3flt.vercel.app",
 ];
 
 // ✅ CORS Express (gère aussi Postman/curl)

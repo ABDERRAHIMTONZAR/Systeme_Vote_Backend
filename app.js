@@ -24,7 +24,8 @@ app.use(express.static(path.join(__dirname, "public")));
 // ✅ CORS (adapte selon ton port front)
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3002","https://systeme-vote-frontend.vercel.app/"],
+    origin: ["http://localhost:3000", "http://localhost:3002",
+        "https://systeme-vote-frontend-3fmu.vercel.app",],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

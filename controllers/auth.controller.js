@@ -35,6 +35,7 @@ exports.createUser = async (req, res) => {
 const { sendOtpMail } = require("./CodeLoginMailer");
 
 exports.loginUser = (req, res) => {
+  console.log("Login attempt");
   const { email, password } = req.body;
 
   const sql = "SELECT * FROM utilisateur WHERE email = ?";
@@ -48,7 +49,6 @@ exports.loginUser = (req, res) => {
     if (!correct)
       return res.status(400).json({ message: "Mot de passe incorrect" });
 
-    // 🔢 Génération OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
@@ -57,10 +57,9 @@ exports.loginUser = (req, res) => {
       [user.Id_user, otp, expires]
     );
 
-    // ✉️ Envoi email
+     console.log("Envoi OTP à", user.Email);
     await sendOtpMail(user.Email, user.Nom, otp);
 
-    // 🔑 Token temporaire
     const preAuthToken = jwt.sign(
       { userId: user.Id_user },
       "SECRET_KEY",

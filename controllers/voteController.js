@@ -20,7 +20,6 @@ exports.insertVote = (req, res) => {
       return res.status(500).json(err);
     }
 
-    // ✅ AJOUT: notifier toutes les pages (temps réel)
     const io = req.app.get("io");
     if (io) {
       io.emit("polls:changed");

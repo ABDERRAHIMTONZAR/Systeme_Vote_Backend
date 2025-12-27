@@ -24,7 +24,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // ✅ CORS (adapte selon ton port front)
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3002"],
+    origin: ["http://localhost:3000", "http://localhost:3002","https://systeme-vote-frontend.vercel.app/"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -43,11 +43,13 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3002"],
+    origin: ["http://localhost:3000", "http://localhost:3002",
+      "https://systeme-vote-frontend.vercel.app/"
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   },
-});
+}); 
 
 io.on("connection", (socket) => {
   console.log("✅ Socket connecté:", socket.id);

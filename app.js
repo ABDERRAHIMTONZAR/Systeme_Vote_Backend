@@ -21,16 +21,33 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// ✅ CORS (adapte selon ton port front)
+/**
+ * ✅ IMPORTANT:
+ * - PAS de slash final
+ * - même liste pour Express + Socket.IO
+ */
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3002",
+  "https://systeme-vote-frontend-zll4.vercel.app",
+];
+
+// ✅ CORS Express (gère aussi Postman/curl)
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3002",
-        "https://systeme-vote-frontend-zll4.vercel.app/",],
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error("CORS blocked: " + origin));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// ✅ Répondre aux preflight OPTIONS (très important)
+app.options("*", cors());
 
 // routes
 app.use("/", indexRouter);
@@ -42,15 +59,14 @@ app.use("/user", userRoutes);
 
 const server = http.createServer(app);
 
+// ✅ Socket.IO avec la même config CORS
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3002",
-      "https://systeme-vote-frontend.vercel.app/"
-    ],
+    origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   },
-}); 
+});
 
 io.on("connection", (socket) => {
   console.log("✅ Socket connecté:", socket.id);
@@ -62,16 +78,16 @@ app.set("io", io);
 setInterval(async () => {
   try {
     const updated = await pollCtrl.runAutoFinish(io);
-    if (updated > 0) {
-      console.log("✅ auto-finish updated:", updated);
-    }
+    if (updated > 0) console.log("✅ auto-finish updated:", updated);
   } catch (e) {
     console.log("❌ auto-finish error:", e.message);
   }
 }, 60_000);
- 
-server.listen(3001, () => {
-  console.log("🚀 Server listening on port 3001");
+
+// ✅ PORT dynamique (Koyeb)
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log("🚀 Server listening on port", PORT);
 });
 
 module.exports = app;

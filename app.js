@@ -53,5 +53,12 @@ app.use("/sondage", sondageRoutes);
 app.use("/vote", voteRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/user", userRoutes);
-
+app.get("/db-test", async (req, res) => {
+  try {
+    const [r] = await db.query("SELECT 1 AS ok");
+    res.json(r[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 module.exports = app;

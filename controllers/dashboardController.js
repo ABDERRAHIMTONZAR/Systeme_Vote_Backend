@@ -1,7 +1,9 @@
 const db = require("../db/db.js");
 
-
-exports.getDashboardStats = (req, res) => {
+/* =========================================================
+   DASHBOARD STATS
+========================================================= */
+exports.getDashboardStats = async (req, res) => {
   const userId = req.userId;
 
   const sql = `
@@ -15,26 +17,29 @@ exports.getDashboardStats = (req, res) => {
         WHERE S.Id_user = ?) AS total_unique_voters
   `;
 
-  db.query(sql, [userId, userId, userId, userId], (err, results) => {
-    if (err) {
-      console.error("Erreur SQL :", err);
-      return res.status(500).json({ error: "Erreur serveur" });
-    }
+  try {
+    const [results] = await db.query(sql, [userId, userId, userId, userId]);
+    const stats = results[0] || {};
 
-    const stats = results[0];
     return res.status(200).json({
-      total_polls: stats.total_polls,
-      active_polls: stats.active_polls,
-      finished_polls: stats.finished_polls,
-      total_unique_voters: stats.total_unique_voters,
+      total_polls: stats.total_polls || 0,
+      active_polls: stats.active_polls || 0,
+      finished_polls: stats.finished_polls || 0,
+      total_unique_voters: stats.total_unique_voters || 0,
     });
-  });
+  } catch (err) {
+    console.error("Erreur SQL getDashboardStats:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
 };
 
-
-exports.getMonthlyStats = (req, res) => {
+/* =========================================================
+   MONTHLY STATS
+========================================================= */
+exports.getMonthlyStats = async (req, res) => {
   const userId = req.userId;
 
+  // ⚠️ Note: si tu veux filtrer par année, ajoute YEAR(...) dans SQL
   const sql = `
     SELECT 
       MONTH(S.date_creation) AS month,
@@ -55,29 +60,31 @@ exports.getMonthlyStats = (req, res) => {
     ORDER BY MONTH(S.date_creation);
   `;
 
-  db.query(sql, [userId, userId], (err, results) => {
-    if (err) return res.status(500).json(err);
+  try {
+    const [results] = await db.query(sql, [userId, userId]);
 
     const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-    const finalData = months.map((m) => ({
-      month: m,
-      polls: 0,
-      visitors: 0,
-    }));
+    const finalData = months.map((m) => ({ month: m, polls: 0, visitors: 0 }));
 
     results.forEach((row) => {
-      const index = row.month - 1;
-      finalData[index].polls = row.polls;
-      finalData[index].visitors = row.visitors || 0;
+      const index = Number(row.month) - 1;
+      if (index >= 0 && index < 12) {
+        finalData[index].polls = Number(row.polls || 0);
+        finalData[index].visitors = Number(row.visitors || 0);
+      }
     });
 
-    res.json(finalData);
-  });
+    return res.json(finalData);
+  } catch (err) {
+    console.error("Erreur SQL getMonthlyStats:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
 };
 
-
-exports.getPollStatusDistribution = (req, res) => {
+/* =========================================================
+   POLL STATUS DISTRIBUTION
+========================================================= */
+exports.getPollStatusDistribution = async (req, res) => {
   const userId = req.userId;
 
   const sql = `
@@ -88,14 +95,19 @@ exports.getPollStatusDistribution = (req, res) => {
     WHERE Id_user = ?
   `;
 
-  db.query(sql, [userId], (err, result) => {
-    if (err) return res.status(500).json(err);
-    res.json(result[0]);
-  });
+  try {
+    const [rows] = await db.query(sql, [userId]);
+    return res.json(rows[0] || { active: 0, finished: 0 });
+  } catch (err) {
+    console.error("Erreur SQL getPollStatusDistribution:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
 };
 
-
-exports.getVoterEngagementDistribution = (req, res) => {
+/* =========================================================
+   VOTER ENGAGEMENT DISTRIBUTION
+========================================================= */
+exports.getVoterEngagementDistribution = async (req, res) => {
   const userId = req.userId;
 
   const sql = `
@@ -105,23 +117,29 @@ exports.getVoterEngagementDistribution = (req, res) => {
     GROUP BY Id_user
   `;
 
-  db.query(sql, [userId], (err, rows) => {
-    if (err) return res.status(500).json(err);
+  try {
+    const [rows] = await db.query(sql, [userId]);
 
     let low = 0, medium = 0, high = 0;
 
     rows.forEach((row) => {
-      if (row.votes <= 2) low++;
-      else if (row.votes <= 10) medium++;
+      const v = Number(row.votes || 0);
+      if (v <= 2) low++;
+      else if (v <= 10) medium++;
       else high++;
     });
 
-    res.json({ low, medium, high });
-  });
+    return res.json({ low, medium, high });
+  } catch (err) {
+    console.error("Erreur SQL getVoterEngagementDistribution:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
 };
 
-
-exports.createPoll = (req, res) => {
+/* =========================================================
+   CREATE POLL (transaction + bulk insert)
+========================================================= */
+exports.createPoll = async (req, res) => {
   console.log("BODY REÇU :", req.body);
 
   const { question, categorie, endDateTime, options } = req.body;
@@ -137,45 +155,47 @@ exports.createPoll = (req, res) => {
     return res.status(400).json({ message: "Date de fin invalide." });
   }
 
-  const pollSQL = `
-    INSERT INTO sondages (question, End_time, Etat, Id_user, Categorie)
-    VALUES (?, ?, 'Actif', ?, ?)
-  `;
+  let conn;
+  try {
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
-  db.query(pollSQL, [question, endTime, userId, categorie], (err, pollResult) => {
-    if (err) {
-      console.error("Erreur sondage :", err);
-      return res.status(500).json({ message: "Erreur serveur." });
-    }
+    const [pollResult] = await conn.query(
+      `INSERT INTO sondages (question, End_time, Etat, Id_user, Categorie)
+       VALUES (?, ?, 'Actif', ?, ?)`,
+      [question, endTime, userId, categorie]
+    );
 
     const pollId = pollResult.insertId;
-    const values = options.map(opt => [opt, pollId]);
 
-    const optionSQL = `
-      INSERT INTO optionssondage (option_text, id_sondage)
-      VALUES ?
-    `;
+    const values = options.map((opt) => [opt, pollId]);
 
-    db.query(optionSQL, [values], (err2) => {
-      if (err2) {
-        console.error("Erreur options :", err2);
-        return res.status(500).json({ message: "Erreur serveur." });
-      }
+    // ⚠️ selon ton schéma, la colonne c’est id_sondage ou Id_Sondage
+    await conn.query(
+      `INSERT INTO optionssondage (option_text, id_sondage) VALUES ?`,
+      [values]
+    );
 
-      // ✅ SOCKET : informer les clients que la liste des polls a changé
-      const io = req.app.get("io");
-      if (io) io.emit("polls:changed");
+    await conn.commit();
 
-      res.status(201).json({
-        message: "Poll créé avec succès",
-        pollId
-      });
-    });
-  });
+    // ✅ SOCKET : informer les clients que la liste des polls a changé
+    const io = req.app.get("io");
+    if (io) io.emit("polls:changed");
+
+    return res.status(201).json({ message: "Poll créé avec succès", pollId });
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error("Erreur createPoll :", err);
+    return res.status(500).json({ message: "Erreur serveur." });
+  } finally {
+    if (conn) conn.release();
+  }
 };
 
-
-exports.getAllPolls = (req, res) => {
+/* =========================================================
+   GET ALL POLLS
+========================================================= */
+exports.getAllPolls = async (req, res) => {
   const userId = req.userId;
 
   const sql = `
@@ -191,10 +211,10 @@ exports.getAllPolls = (req, res) => {
     ORDER BY date_creation DESC
   `;
 
-  db.query(sql, [userId], (err, results) => {
-    if (err) return res.status(500).json(err);
+  try {
+    const [results] = await db.query(sql, [userId]);
 
-    const formatted = results.map(poll => {
+    const formatted = results.map((poll) => {
       const now = new Date();
       const end = new Date(poll.End_time);
       const created = new Date(poll.date_creation);
@@ -205,15 +225,22 @@ exports.getAllPolls = (req, res) => {
         category: poll.Categorie,
         createdOn: created.toISOString().split("T")[0],
         endsOn: end.toISOString().split("T")[0],
-        status: end > now ? "Active" : "Ended"
+        status: end > now ? "Active" : "Ended",
+        etat: poll.Etat,
       };
     });
 
-    res.json(formatted);
-  });
+    return res.json(formatted);
+  } catch (err) {
+    console.error("Erreur getAllPolls:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
 };
 
-exports.updatePoll = (req, res) => {
+/* =========================================================
+   UPDATE POLL
+========================================================= */
+exports.updatePoll = async (req, res) => {
   const { question, Categorie, End_time } = req.body;
   const id = req.params.id;
 
@@ -221,11 +248,15 @@ exports.updatePoll = (req, res) => {
     return res.status(400).json({ message: "Champs manquants." });
   }
 
-  const checkSQL = `SELECT End_time FROM sondages WHERE Id_Sondage = ?`;
+  try {
+    const [rows] = await db.query(
+      `SELECT End_time FROM sondages WHERE Id_Sondage = ? LIMIT 1`,
+      [id]
+    );
 
-  db.query(checkSQL, [id], (err, rows) => {
-    if (err) return res.status(500).json(err);
-    if (rows.length === 0) return res.status(404).json({ message: "Sondage introuvable." });
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Sondage introuvable." });
+    }
 
     const now = new Date();
     const end = new Date(rows[0].End_time);
@@ -234,54 +265,62 @@ exports.updatePoll = (req, res) => {
       return res.status(403).json({ message: "Impossible de modifier un sondage terminé." });
     }
 
-    const sql = `
-      UPDATE sondages 
-      SET question = ?, Categorie = ?, End_time = ?
-      WHERE Id_Sondage = ?
-    `;
+    await db.query(
+      `UPDATE sondages SET question = ?, Categorie = ?, End_time = ? WHERE Id_Sondage = ?`,
+      [question, Categorie, End_time, id]
+    );
 
-    db.query(sql, [question, Categorie, End_time, id], (err2) => {
-      if (err2) return res.status(500).json(err2);
+    const io = req.app.get("io");
+    if (io) io.emit("polls:changed");
 
-      // ✅ SOCKET
-      const io = req.app.get("io");
-      if (io) io.emit("polls:changed");
-
-      res.json({ message: "Sondage mis à jour avec succès !" });
-    });
-  });
+    return res.json({ message: "Sondage mis à jour avec succès !" });
+  } catch (err) {
+    console.error("Erreur updatePoll:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  }
 };
 
-exports.deletePoll = (req, res) => {
+/* =========================================================
+   DELETE POLL (transaction)
+========================================================= */
+exports.deletePoll = async (req, res) => {
   const pollId = req.params.id;
   const userId = req.userId;
 
-  const checkSQL = "SELECT * FROM sondages WHERE Id_Sondage = ? AND Id_user = ?";
-  db.query(checkSQL, [pollId, userId], (err, rows) => {
-    if (err) return res.status(500).json(err);
+  let conn;
+  try {
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    const [rows] = await conn.query(
+      "SELECT 1 FROM sondages WHERE Id_Sondage = ? AND Id_user = ? LIMIT 1",
+      [pollId, userId]
+    );
 
     if (rows.length === 0) {
+      await conn.rollback();
       return res.status(403).json({ message: "Vous ne pouvez pas supprimer ce sondage." });
     }
 
-    const deleteVotesSQL = "DELETE FROM votes WHERE Id_Sondage = ?";
-    db.query(deleteVotesSQL, [pollId], (err2) => {
-      if (err2) return res.status(500).json(err2);
+    await conn.query("DELETE FROM votes WHERE Id_Sondage = ?", [pollId]);
 
-      const deleteOptionsSQL = "DELETE FROM optionssondage WHERE Id_Sondage = ?";
-      db.query(deleteOptionsSQL, [pollId], (err3) => {
-        if (err3) return res.status(500).json(err3);
+    // ⚠️ Dans ton code tu avais Id_Sondage ici, mais dans createPoll tu utilises id_sondage
+    // Choisis UNE SEULE convention dans la DB (recommandé: Id_Sondage partout)
+    await conn.query("DELETE FROM optionssondage WHERE id_sondage = ?", [pollId]);
 
-        const deletePollSQL = "DELETE FROM sondages WHERE Id_Sondage = ?";
-        db.query(deletePollSQL, [pollId], (err4) => {
-          if (err4) return res.status(500).json(err4);
+    await conn.query("DELETE FROM sondages WHERE Id_Sondage = ?", [pollId]);
 
-          const io = req.app.get("io");
-          if (io) io.emit("polls:changed");
+    await conn.commit();
 
-          res.json({ message: "Sondage supprimé avec succès." });
-        });
-      });
-    });
-  });
+    const io = req.app.get("io");
+    if (io) io.emit("polls:changed");
+
+    return res.json({ message: "Sondage supprimé avec succès." });
+  } catch (err) {
+    if (conn) await conn.rollback();
+    console.error("Erreur deletePoll:", err);
+    return res.status(500).json({ error: "Erreur serveur" });
+  } finally {
+    if (conn) conn.release();
+  }
 };

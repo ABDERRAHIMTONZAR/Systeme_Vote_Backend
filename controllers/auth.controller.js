@@ -43,8 +43,8 @@ exports.loginUser = async (req, res) => {
   }
 
   try {
-    // 1) user
-    const [rows] = await db.promise().query(
+    // 1️⃣ User
+    const [rows] = await db.query(
       "SELECT * FROM utilisateur WHERE email = ? LIMIT 1",
       [email]
     );
@@ -55,51 +55,55 @@ exports.loginUser = async (req, res) => {
 
     const user = rows[0];
 
-    // ⚠️ adapte ces champs selon ta DB
-    const hashedPassword = user.password;
-    const userEmail = user.email;      // PAS user.Email
-    const userName = user.nom || user.Nom;
+    // ⚠️ adapte exactement aux noms de colonnes de ta table
     const userId = user.Id_user || user.id_user || user.id;
+    const userEmail = user.email;
+    const userName = user.nom || user.Nom;
+    const hashedPassword = user.password;
 
-    // 2) bcrypt
+    // 2️⃣ Password
     const correct = await bcrypt.compare(password, hashedPassword);
     if (!correct) {
       return res.status(400).json({ message: "Mot de passe incorrect" });
     }
 
-    // 3) otp
+    // 3️⃣ OTP
     const otp = String(Math.floor(100000 + Math.random() * 900000));
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
-    await db.promise().query(
+    await db.query(
       "INSERT INTO user_otp(user_id, otp, expires_at) VALUES (?, ?, ?)",
       [userId, otp, expires]
     );
 
     console.log("Envoi OTP à", userEmail);
 
-    // 4) email (protégé: si SMTP bloque, on ne timeout pas toute la route)
+    // 4️⃣ Email (timeout sécurisé)
     await promiseWithTimeout(
       sendOtpMail(userEmail, userName, otp),
-      8000, // 8s
+      8000,
       "Timeout envoi email"
     );
 
-    // 5) token
+    // 5️⃣ Token
     const preAuthToken = jwt.sign(
       { userId },
       process.env.JWT_SECRET || "SECRET_KEY",
       { expiresIn: "5m" }
     );
 
-    return res.json({ requires2fa: true, preAuthToken });
+    return res.json({
+      requires2fa: true,
+      preAuthToken,
+    });
+
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     return res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// helper timeout
+// ⏱ timeout helper
 function promiseWithTimeout(promise, ms, errorMsg) {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(errorMsg)), ms);
@@ -108,6 +112,7 @@ function promiseWithTimeout(promise, ms, errorMsg) {
       .catch((e) => { clearTimeout(t); reject(e); });
   });
 }
+
 exports.verify2fa = (req, res) => {
   const { code, preAuthToken } = req.body;
 

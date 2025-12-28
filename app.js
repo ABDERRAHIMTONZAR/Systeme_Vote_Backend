@@ -87,5 +87,13 @@ setInterval(async () => {
     console.log("❌ auto-finish error:", e.message);
   }
 }, 60_000);
+app.get("/dbtest", async (req, res) => {
+  try {
+    const [r] = await db.query("SELECT 1 as ok");
+    res.json(r[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 module.exports = app;

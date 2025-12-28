@@ -34,44 +34,80 @@ exports.createUser = async (req, res) => {
 
 const { sendOtpMail } = require("./CodeLoginMailer");
 
-exports.loginUser = (req, res) => {
+exports.loginUser = async (req, res) => {
   console.log("Login attempt");
   const { email, password } = req.body;
 
-  const sql = "SELECT * FROM utilisateur WHERE email = ?";
-  db.query(sql, [email], async (err, result) => {
-    if (err) return res.status(500).json({ message: "Erreur serveur" });
-    if (result.length === 0)
+  if (!email || !password) {
+    return res.status(400).json({ message: "email et password requis" });
+  }
+
+  try {
+    // 1) user
+    const [rows] = await db.promise().query(
+      "SELECT * FROM utilisateur WHERE email = ? LIMIT 1",
+      [email]
+    );
+
+    if (rows.length === 0) {
       return res.status(400).json({ message: "Email introuvable" });
+    }
 
-    const user = result[0];
-    const correct = await bcrypt.compare(password, user.password);
-    if (!correct)
+    const user = rows[0];
+
+    // ⚠️ adapte ces champs selon ta DB
+    const hashedPassword = user.password;
+    const userEmail = user.email;      // PAS user.Email
+    const userName = user.nom || user.Nom;
+    const userId = user.Id_user || user.id_user || user.id;
+
+    // 2) bcrypt
+    const correct = await bcrypt.compare(password, hashedPassword);
+    if (!correct) {
       return res.status(400).json({ message: "Mot de passe incorrect" });
+    }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // 3) otp
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
     const expires = new Date(Date.now() + 5 * 60 * 1000);
 
     await db.promise().query(
       "INSERT INTO user_otp(user_id, otp, expires_at) VALUES (?, ?, ?)",
-      [user.Id_user, otp, expires]
+      [userId, otp, expires]
     );
 
-     console.log("Envoi OTP à", user.Email);
-    await sendOtpMail(user.Email, user.Nom, otp);
+    console.log("Envoi OTP à", userEmail);
 
+    // 4) email (protégé: si SMTP bloque, on ne timeout pas toute la route)
+    await promiseWithTimeout(
+      sendOtpMail(userEmail, userName, otp),
+      8000, // 8s
+      "Timeout envoi email"
+    );
+
+    // 5) token
     const preAuthToken = jwt.sign(
-      { userId: user.Id_user },
-      "SECRET_KEY",
+      { userId },
+      process.env.JWT_SECRET || "SECRET_KEY",
       { expiresIn: "5m" }
     );
 
-    return res.json({
-      requires2fa: true,
-      preAuthToken,
-    });
-  });
+    return res.json({ requires2fa: true, preAuthToken });
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    return res.status(500).json({ message: "Erreur serveur" });
+  }
 };
+
+// helper timeout
+function promiseWithTimeout(promise, ms, errorMsg) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(errorMsg)), ms);
+    promise
+      .then((v) => { clearTimeout(t); resolve(v); })
+      .catch((e) => { clearTimeout(t); reject(e); });
+  });
+}
 exports.verify2fa = (req, res) => {
   const { code, preAuthToken } = req.body;
 

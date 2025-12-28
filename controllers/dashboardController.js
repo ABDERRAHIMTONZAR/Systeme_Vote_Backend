@@ -39,29 +39,22 @@ exports.getDashboardStats = async (req, res) => {
 exports.getMonthlyStats = async (req, res) => {
   const userId = req.userId;
 
-  // ⚠️ Note: si tu veux filtrer par année, ajoute YEAR(...) dans SQL
+  // ✅ 1 seule requête, sans sous-requête corrélée
+  // visitors = nombre de votants uniques par mois (sur les sondages du user)
   const sql = `
-    SELECT 
+    SELECT
       MONTH(S.date_creation) AS month,
-      COUNT(S.Id_Sondage) AS polls,
-      (
-        SELECT COUNT(DISTINCT V.Id_user)
-        FROM votes V
-        WHERE V.Id_Sondage IN (
-          SELECT Id_Sondage 
-          FROM sondages 
-          WHERE Id_user = ?
-        )
-        AND MONTH(V.date_vote) = MONTH(S.date_creation)
-      ) AS visitors
+      COUNT(DISTINCT S.Id_Sondage) AS polls,
+      COUNT(DISTINCT V.Id_user) AS visitors
     FROM sondages S
+    LEFT JOIN votes V ON V.Id_Sondage = S.Id_Sondage
     WHERE S.Id_user = ?
     GROUP BY MONTH(S.date_creation)
     ORDER BY MONTH(S.date_creation);
   `;
 
   try {
-    const [results] = await db.query(sql, [userId, userId]);
+    const [results] = await db.query(sql, [userId]);
 
     const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     const finalData = months.map((m) => ({ month: m, polls: 0, visitors: 0 }));
@@ -77,9 +70,10 @@ exports.getMonthlyStats = async (req, res) => {
     return res.json(finalData);
   } catch (err) {
     console.error("Erreur SQL getMonthlyStats:", err);
-    return res.status(500).json({ error: "Erreur serveur" });
+    return res.status(500).json({ message: "Erreur serveur" });
   }
 };
+
 
 /* =========================================================
    POLL STATUS DISTRIBUTION

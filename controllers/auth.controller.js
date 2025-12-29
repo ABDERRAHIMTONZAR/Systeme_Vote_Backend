@@ -75,60 +75,57 @@ exports.createUser = async (req, res) => {
 exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-    
-    // Vérification rapide
+
     if (!email || !password) {
       return errorResponse(res, "Email et mot de passe requis.", 400);
     }
-    
-    // Récupération utilisateur
-    const users = await queryAsync(
+
+    const [users] = await db.query(
       "SELECT Id_user, nom, prenom, email, password FROM utilisateur WHERE email = ? LIMIT 1",
       [email]
     );
-    
+
     if (users.length === 0) {
       return errorResponse(res, "Identifiants incorrects.", 401);
     }
-    
+
     const user = users[0];
-    
-    // Vérification mot de passe
+
     const passwordValid = await bcrypt.compare(password, user.password);
     if (!passwordValid) {
       return errorResponse(res, "Identifiants incorrects.", 401);
     }
-    
-    // Génération OTP
+
     const otp = generateOtp();
     const expires = new Date(Date.now() + 5 * 60 * 1000);
-    
-    // Insertion OTP
-    await queryAsync(
+
+    await db.query(
       "INSERT INTO user_otp(user_id, otp, expires_at) VALUES (?, ?, ?)",
       [user.Id_user, otp, expires]
     );
-    
-    // Envoi email OTP (asynchrone)
-    sendOtpMail(user.email, user.prenom || user.nom, otp)
-      .catch(err => console.error('Email error (non-blocking):', err));
-    
-    // Token temporaire
+
     const preAuthToken = jwt.sign(
       { userId: user.Id_user },
       process.env.JWT_SECRET || "SECRET_KEY",
       { expiresIn: "5m" }
     );
-    
+
+    // ✅ répondre tout de suite
     res.json({
       requires2fa: true,
       preAuthToken,
       message: "Code de vérification envoyé"
     });
-    
+
+    // ✅ envoyer le mail après la réponse (évite ralentissements)
+    setImmediate(() => {
+      sendOtpMail(user.email, user.prenom || user.nom, otp)
+        .catch(err => console.error("Email error:", err));
+    });
+
   } catch (error) {
-    console.error('Login error:', error);
-    errorResponse(res, "Erreur d'authentification");
+    console.error("Login error:", error);
+    return errorResponse(res, "Erreur d'authentification", 500);
   }
 };
 
@@ -211,7 +208,6 @@ exports.resend2fa = async (req, res) => {
       );
     }
     
-    // Récupération utilisateur
     const users = await queryAsync(
       "SELECT email, prenom, nom FROM utilisateur WHERE Id_user = ? LIMIT 1",
       [decoded.userId]

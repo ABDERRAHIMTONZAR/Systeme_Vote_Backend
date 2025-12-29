@@ -1,17 +1,26 @@
-
 const nodemailer = require("nodemailer");
 
-// Pool de connexions email pour performances
+const MAIL_USER = process.env.MAIL_USER;
+const MAIL_PASS = process.env.MAIL_PASS;
+
+if (!MAIL_USER || !MAIL_PASS) {
+  console.warn("⚠️ MAIL_USER/MAIL_PASS manquants dans les variables d'environnement.");
+}
+
+// Transport (Gmail)
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: "belaoualiali1@gmail.com",
-    pass: "jnvb whlb lmao ifwl",
+    user: MAIL_USER,
+    pass: MAIL_PASS,
   },
+  // anti-hangs (utile en cloud)
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 20_000,
 });
 
-
-// Template OTP de connexion
+// Template OTP connexion
 const otpTemplate = (nom, otp) => `
 <!DOCTYPE html>
 <html>
@@ -47,7 +56,7 @@ const otpTemplate = (nom, otp) => `
 </html>
 `;
 
-// Template réinitialisation mot de passe
+// Template reset mdp
 const resetTemplate = (nom, otp) => `
 <!DOCTYPE html>
 <html>
@@ -86,43 +95,34 @@ const resetTemplate = (nom, otp) => `
 </html>
 `;
 
-// Fonction générique d'envoi d'email
 const sendEmail = async (to, subject, html) => {
+  if (!MAIL_USER || !MAIL_PASS) {
+    console.error("❌ MAIL_USER/MAIL_PASS non configurés. Email non envoyé.");
+    return false;
+  }
+
   try {
-    const mailOptions = {
-      from: `"Votify" <${process.env.EMAIL_USER || "belaoualiali1@gmail.com"}>`,
+    const info = await transporter.sendMail({
+      from: `"Votify" <${MAIL_USER}>`,
       to,
       subject,
       html,
-      // Options de performance
       headers: {
-        'X-Priority': '3',
-        'X-MSMail-Priority': 'Normal',
-      }
-    };
+        "X-Priority": "3",
+        "X-MSMail-Priority": "Normal",
+      },
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`Email envoyé à ${to}`, info.messageId);
+    console.log(`✅ Email envoyé à ${to} (${info.messageId})`);
     return true;
   } catch (err) {
-    console.error("Erreur d'envoi email à", to, err.message);
+    console.error(`❌ Erreur d'envoi email à ${to}:`, err.message);
     return false;
   }
 };
 
-// Export des fonctions
-exports.sendOtpMail = async (email, nom, otp) => {
-  return sendEmail(
-    email,
-    "Code de vérification - Votify",
-    otpTemplate(nom, otp)
-  );
-};
+exports.sendOtpMail = (email, nom, otp) =>
+  sendEmail(email, "Code de vérification - Votify", otpTemplate(nom, otp));
 
-exports.sendResetMail = async (email, nom, otp) => {
-  return sendEmail(
-    email,
-    "Réinitialisation de mot de passe - Votify",
-    resetTemplate(nom, otp)
-  );
-};
+exports.sendResetMail = (email, nom, otp) =>
+  sendEmail(email, "Réinitialisation de mot de passe - Votify", resetTemplate(nom, otp));

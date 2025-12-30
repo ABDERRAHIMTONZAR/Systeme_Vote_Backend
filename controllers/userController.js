@@ -83,3 +83,4 @@ exports.updateUser = async (req, res) => {
     return res.status(500).json({ message: "Erreur lors de la mise à jour" });
   }
 };
+

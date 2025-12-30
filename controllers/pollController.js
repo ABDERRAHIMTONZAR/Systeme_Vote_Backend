@@ -115,12 +115,15 @@ exports.getPollResults = async (req, res) => {
   }
 };
 
+// controllers/pollController.js
+const db = require("../db/db");
+const { notifyVoters } = require("../utils/notifyVoters");
+
 /* =========================================================
    AUTO-FINISH (reusable)
 ========================================================= */
 exports.runAutoFinish = async (io) => {
   try {
-    // 1) récupérer les sondages à terminer
     const selectSql = `
       SELECT Id_Sondage
       FROM sondages
@@ -130,11 +133,11 @@ exports.runAutoFinish = async (io) => {
 
     const [pollsToFinish] = await db.query(selectSql);
 
-    if (!pollsToFinish || pollsToFinish.length === 0) {
-      return 0;
-    }
+    console.log("pollsToFinish:", pollsToFinish.length);
+    console.log("notifyVoters typeof:", typeof notifyVoters);
 
-    // 2) passer en finished
+    if (!pollsToFinish || pollsToFinish.length === 0) return 0;
+
     const updateSql = `
       UPDATE sondages
       SET Etat = 'finished'
@@ -144,16 +147,16 @@ exports.runAutoFinish = async (io) => {
 
     const [updateResult] = await db.query(updateSql);
 
-    // 3) notifier front via socket
     if (io) io.emit("polls:changed");
 
-    // 4) notifier les votants
-    await Promise.all(pollsToFinish.map((s) => notifyVoters(s.Id_Sondage)));
+    const results = await Promise.all(
+      pollsToFinish.map((s) => notifyVoters(s.Id_Sondage))
+    );
+    console.log("notify results:", results);
 
     return updateResult.affectedRows || 0;
   } catch (err) {
     console.error("runAutoFinish ERROR:", err);
-    // Ici on remonte l’erreur à l’appelant
     throw err;
   }
 };
@@ -171,6 +174,7 @@ exports.autoFinishSondages = async (req, res) => {
     return res.status(500).json({ message: "Erreur serveur", error: e.message });
   }
 };
+
 
 /* =========================================================
    GET SONDAGE BY ID

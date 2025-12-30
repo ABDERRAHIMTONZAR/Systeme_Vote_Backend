@@ -1,6 +1,6 @@
+// app.js
 const express = require("express");
 const path = require("path");
-
 const db = require("./db/db");
 
 const indexRouter = require("./routes/index");
@@ -18,10 +18,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, "public")));
 
+console.log("MAIL_USER set:", !!process.env.MAIL_USER, "MAIL_PASS set:", !!process.env.MAIL_PASS);
 
 const allowed = (origin) => {
-  if (!origin) return true; // Postman/curl
-  if (origin === "http://localhost:3000") return true; 
+  if (!origin) return true;
+  if (origin === "http://localhost:3000") return true;
   if (origin === "http://localhost:3002") return true;
   if (/^https:\/\/systeme-vote-frontend-.*\.vercel\.app$/.test(origin)) return true;
   return false;
@@ -44,7 +45,6 @@ app.use((req, res, next) => {
   next();
 });
 
-
 app.get("/health", (req, res) => res.status(200).send("ok"));
 
 app.get("/db-test", async (req, res) => {
@@ -56,7 +56,6 @@ app.get("/db-test", async (req, res) => {
   }
 });
 
-
 app.use("/", indexRouter);
 app.use("/users", authRoutes);
 app.use("/sondage", sondageRoutes);
@@ -64,16 +63,16 @@ app.use("/vote", voteRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/user", userRoutes);
 
-
+// ✅ auto-finish loop
 setInterval(async () => {
   try {
-    const io = app.get("io"); // ✅ défini dans bin/www
+    const io = app.get("io");
+    if (!io) console.log("⚠️ io undefined (socket notif off)");
     const updated = await pollCtrl.runAutoFinish(io);
     if (updated > 0) console.log("✅ auto-finish updated:", updated);
   } catch (e) {
     console.log("❌ auto-finish error:", e.message);
   }
 }, 60_000);
-
 
 module.exports = app;

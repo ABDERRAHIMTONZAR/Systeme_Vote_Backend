@@ -10,11 +10,7 @@ if (!MAIL_USER || !MAIL_PASS) {
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
-  auth: {
-    user: MAIL_USER,
-    pass: MAIL_PASS,
-  },
-  // anti-hangs en cloud
+  auth: { user: MAIL_USER, pass: MAIL_PASS },
   connectionTimeout: 10_000,
   greetingTimeout: 10_000,
   socketTimeout: 20_000,
@@ -23,16 +19,13 @@ const transporter = nodemailer.createTransport({
 function normalizeEmail(row) {
   return row.email ?? row.Email ?? row.EMAIL ?? null;
 }
-
 function normalizeName(row) {
   return row.nom ?? row.Nom ?? row.name ?? row.Name ?? "";
 }
-
 function isValidEmail(email) {
   return typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-// Limite de concurrence (Gmail n’aime pas le spam)
 async function runWithLimit(items, limit, worker) {
   const results = [];
   let i = 0;
@@ -48,9 +41,11 @@ async function runWithLimit(items, limit, worker) {
   return results;
 }
 
-exports.notifyVoters = async (Id_Sondage) => {
+async function notifyVoters(Id_Sondage) {
   try {
-    if (!MAIL_USER || !MAIL_PASS) return { sent: 0, skipped: 0, reason: "MAIL_ENV_MISSING" };
+    if (!MAIL_USER || !MAIL_PASS) {
+      return { sent: 0, skipped: 0, reason: "MAIL_ENV_MISSING" };
+    }
 
     const [voters] = await db.query(
       `SELECT u.email, u.nom
@@ -60,9 +55,9 @@ exports.notifyVoters = async (Id_Sondage) => {
       [Id_Sondage]
     );
 
-    if (!voters || voters.length === 0) return { sent: 0, skipped: 0 };
+    if (!voters || voters.length === 0) return { sent: 0, skipped: 0, reason: "NO_VOTERS" };
 
-    const uniqueEmails = new Map(); // évite doublons
+    const uniqueEmails = new Map();
     for (const v of voters) {
       const to = normalizeEmail(v);
       const name = normalizeName(v);
@@ -78,7 +73,6 @@ exports.notifyVoters = async (Id_Sondage) => {
     const subject = "Sondage terminé";
     const from = `"Votify App" <${MAIL_USER}>`;
 
-    // ⚙️ Concurrence 3 (safe pour Gmail)
     await runWithLimit(entries, 3, async ([to, name]) => {
       try {
         await transporter.sendMail({
@@ -100,10 +94,10 @@ Merci !`,
       }
     });
 
-    console.log(`✅ notifyVoters: ${sent} emails envoyés, ${skipped} ignorés.`);
+    console.log(`✅ notifyVoters (poll ${Id_Sondage}): ${sent} emails envoyés, ${skipped} ignorés.`);
     return { sent, skipped };
   } catch (err) {
     console.error("❌ Erreur notifyVoters :", err);
     return { sent: 0, skipped: 0, error: err.message };
   }
-};
+}

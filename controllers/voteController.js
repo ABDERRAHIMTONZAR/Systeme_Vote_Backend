@@ -51,7 +51,7 @@ exports.getVotesByPoll = async (req, res) => {
       SELECT 
         s.Id_Sondage as pollId,
         s.question,
-        s.Status,
+        s.Etat,
         s.Categorie,
         s.date_creation as createdOn,
         s.End_time as endsOn,

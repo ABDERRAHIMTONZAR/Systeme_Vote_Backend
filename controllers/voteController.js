@@ -50,17 +50,17 @@ exports.getVotesByPoll = async (req, res) => {
     const sql = `
       SELECT 
         s.Id_Sondage as pollId,
-        s.Question,
+        s.question,
         s.Status,
         s.Categorie,
-        s.Created_date as createdOn,
+        s.date_creation as createdOn,
         s.End_time as endsOn,
-        COUNT(v.Id_Vote) as voters
+        COUNT(v.Id_Votes) as voters
       FROM sondages s
       LEFT JOIN votes v ON s.Id_Sondage = v.Id_Sondage
-      WHERE s.Id_User = ?
+      WHERE s.Id_user = ?
       GROUP BY s.Id_Sondage
-      ORDER BY s.Created_date DESC
+      ORDER BY s.date_creation DESC
     `;
     
     const [polls] = await db.query(sql, [userId]);

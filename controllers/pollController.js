@@ -122,37 +122,52 @@ exports.getPollResults = async (req, res) => {
 ========================================================= */
 exports.runAutoFinish = async (io) => {
   try {
-    const selectSql = `
+    // Debug temps DB
+    const [t] = await db.query("SELECT NOW() AS now, UTC_TIMESTAMP() AS utc, @@session.time_zone AS tz");
+    console.log("DB time:", t[0]);
+
+    // ✅ UTC pour éviter le “pollsToFinish: 0”
+    const [pollsToFinish] = await db.query(`
       SELECT Id_Sondage
       FROM sondages
-      WHERE End_time <= NOW()
+      WHERE End_time <= UTC_TIMESTAMP()
         AND Etat != 'finished'
-    `;
-
-    const [pollsToFinish] = await db.query(selectSql);
+    `);
 
     console.log("pollsToFinish:", pollsToFinish.length);
-    console.log("notifyVoters typeof:", typeof notifyVoters);
 
     if (!pollsToFinish || pollsToFinish.length === 0) return 0;
 
-    const updateSql = `
-      UPDATE sondages
-      SET Etat = 'finished'
-      WHERE End_time <= NOW()
-        AND Etat != 'finished'
-    `;
+    let updatedTotal = 0;
 
-    const [updateResult] = await db.query(updateSql);
+    for (const row of pollsToFinish) {
+      const pollId = row.Id_Sondage;
 
-    if (io) io.emit("polls:changed");
+      // ✅ finish poll par poll
+      const [u] = await db.query(
+        `UPDATE sondages
+         SET Etat = 'finished'
+         WHERE Id_Sondage = ?
+           AND Etat != 'finished'`,
+        [pollId]
+      );
 
-    const results = await Promise.all(
-      pollsToFinish.map((s) => notifyVoters(s.Id_Sondage))
-    );
-    console.log("notify results:", results);
+      if ((u.affectedRows || 0) > 0) {
+        updatedTotal += u.affectedRows;
 
-    return updateResult.affectedRows || 0;
+        // sockets
+        if (io) {
+          io.emit("polls:changed");
+          io.emit("poll:finished", { pollId });
+        }
+
+        // mails
+        const r = await notifyVoters(pollId);
+        console.log("notifyVoters result:", pollId, r);
+      }
+    }
+
+    return updatedTotal;
   } catch (err) {
     console.error("runAutoFinish ERROR:", err);
     throw err;

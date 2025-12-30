@@ -78,5 +78,13 @@ setInterval(async () => {
     console.log("❌ auto-finish error:", e.message);
   }
 }, 30_000);
-
+app.get("/test-mail/:id", async (req, res) => {
+  try {
+    const { notifyVoters } = require("./controllers/notifyVoters");
+    const r = await notifyVoters(req.params.id);
+    res.json(r);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 module.exports = app;

@@ -41,7 +41,7 @@ async function runWithLimit(items, limit, worker) {
   return results;
 }
 
-async function notifyVoters(Id_Sondage) {
+exports.notifyVoters = async function notifyVoters(Id_Sondage) {
   try {
     if (!MAIL_USER || !MAIL_PASS) {
       return { sent: 0, skipped: 0, reason: "MAIL_ENV_MISSING" };

@@ -73,7 +73,7 @@ setInterval(async () => {
   } catch (e) {
     console.log("❌ auto-finish error:", e.message);
   }
-}, 60_000);
+}, 1000);
 
 
 module.exports = app;

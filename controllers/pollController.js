@@ -115,9 +115,7 @@ exports.getPollResults = async (req, res) => {
   }
 };
 
-// controllers/pollController.js
-const db = require("../db/db");
-const { notifyVoters } = require("../utils/notifyVoters");
+
 
 /* =========================================================
    AUTO-FINISH (reusable)

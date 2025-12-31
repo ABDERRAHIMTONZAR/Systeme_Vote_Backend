@@ -128,10 +128,10 @@ exports.runAutoFinish = async (io) => {
 
     // ✅ UTC pour éviter le “pollsToFinish: 0”
     const [pollsToFinish] = await db.query(`
-      SELECT Id_Sondage
-      FROM sondages
-      WHERE End_time <= UTC_TIMESTAMP()
-        AND Etat != 'finished'
+        SELECT Id_Sondage
+    FROM sondages
+    WHERE DATE_SUB(End_time, INTERVAL 1 HOUR) <= UTC_TIMESTAMP()
+      AND Etat <> 'finished';
     `);
 
     console.log("pollsToFinish:", pollsToFinish.length);

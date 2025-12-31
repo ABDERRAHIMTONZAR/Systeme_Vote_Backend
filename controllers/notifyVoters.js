@@ -1,4 +1,3 @@
-// controllers/notifyVoters.js
 const nodemailer = require("nodemailer");
 const db = require("../db/db.js");
 
@@ -48,7 +47,6 @@ exports.notifyVoters = async function notifyVoters(Id_Sondage) {
       return { sent: 0, failed: 0, skipped: 0, reason: "MAIL_ENV_MISSING" };
     }
 
-    // ✅ votants
     const [voters] = await db.query(
       `SELECT DISTINCT u.email, u.nom
        FROM votes v
@@ -57,7 +55,6 @@ exports.notifyVoters = async function notifyVoters(Id_Sondage) {
       [Id_Sondage]
     );
 
-    // ✅ créateur (pour envoyer même si 0 votants)
     const [creatorRows] = await db.query(
       `SELECT u.email, u.nom
        FROM sondages s
@@ -67,7 +64,7 @@ exports.notifyVoters = async function notifyVoters(Id_Sondage) {
       [Id_Sondage]
     );
 
-    const unique = new Map(); // email -> name
+    const unique = new Map();
 
     for (const v of voters || []) {
       const to = normalizeEmail(v);
@@ -82,7 +79,7 @@ exports.notifyVoters = async function notifyVoters(Id_Sondage) {
       if (isValidEmail(to)) unique.set(to, name);
     }
 
-    const entries = Array.from(unique.entries()); // [email, name]
+    const entries = Array.from(unique.entries()); 
     if (entries.length === 0) {
       return { sent: 0, failed: 0, skipped: (voters?.length || 0), reason: "NO_VALID_EMAILS" };
     }

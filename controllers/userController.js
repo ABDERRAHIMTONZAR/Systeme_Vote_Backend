@@ -1,7 +1,6 @@
 const bcrypt = require("bcrypt");
 const db = require("../db/db");
 
-// helpers: supporte Nom/nom, Email/email, Password/password...
 function pick(row, keys) {
   for (const k of keys) {
     if (row && row[k] !== undefined && row[k] !== null) return row[k];
@@ -24,7 +23,6 @@ exports.getUserById = async (req, res) => {
 
     const u = rows[0];
 
-    // renvoyer un format stable au frontend
     return res.json({
       Id_user: pick(u, ["Id_user", "id_user", "id"]),
       Nom: pick(u, ["Nom", "nom"]),
@@ -46,7 +44,6 @@ exports.updateUser = async (req, res) => {
   }
 
   try {
-    // 1) vérifier que user existe
     const [exists] = await db.query(
       "SELECT 1 FROM utilisateur WHERE Id_user = ? LIMIT 1",
       [userId]
@@ -56,12 +53,10 @@ exports.updateUser = async (req, res) => {
       return res.status(404).json({ message: "Utilisateur introuvable" });
     }
 
-    // 2) update
     if (password && password.trim() !== "") {
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // ⚠️ IMPORTANT: dans ton projet tu utilises souvent colonnes en minuscule
-      // Je mets une version "minuscule" (recommandé). Si ta DB est en Majuscule, dis-moi et je l’adapte.
+      
       await db.query(
         `UPDATE utilisateur
          SET nom = ?, prenom = ?, email = ?, password = ?

@@ -7,20 +7,17 @@ if (!MAIL_USER || !MAIL_PASS) {
   console.warn("⚠️ MAIL_USER/MAIL_PASS manquants dans les variables d'environnement.");
 }
 
-// Transport (Gmail)
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: MAIL_USER,
     pass: MAIL_PASS,
   },
-  // anti-hangs (utile en cloud)
   connectionTimeout: 10_000,
   greetingTimeout: 10_000,
   socketTimeout: 20_000,
 });
 
-// Template OTP connexion
 const otpTemplate = (nom, otp) => `
 <!DOCTYPE html>
 <html>
@@ -56,7 +53,6 @@ const otpTemplate = (nom, otp) => `
 </html>
 `;
 
-// Template reset mdp
 const resetTemplate = (nom, otp) => `
 <!DOCTYPE html>
 <html>

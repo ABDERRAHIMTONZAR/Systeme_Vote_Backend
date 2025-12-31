@@ -1,4 +1,3 @@
-// app.js
 const express = require("express");
 const path = require("path");
 const db = require("./db/db");
@@ -50,16 +49,9 @@ app.use((req, res, next) => {
   next();
 });
 
+//TEST
 app.get("/health", (req, res) => res.status(200).send("ok"));
 
-app.get("/db-test", async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT DATABASE() AS db, NOW() AS now");
-    res.json(rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 app.use("/", indexRouter);
 app.use("/users", authRoutes);
@@ -68,7 +60,6 @@ app.use("/vote", voteRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/user", userRoutes);
 
-// ✅ auto-finish loop
 setInterval(async () => {
   try {
     const io = app.get("io");
@@ -78,6 +69,8 @@ setInterval(async () => {
     console.log("❌ auto-finish error:", e.message);
   }
 }, 30_000);
+
+// Seulment pour tester le mail de notification
 app.get("/test-mail/:id", async (req, res) => {
   try {
     const { notifyVoters } = require("./controllers/notifyVoters");

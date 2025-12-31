@@ -11,7 +11,6 @@ exports.insertVote = async (req, res) => {
   }
 
   try {
-    // ✅ empêcher un user de voter 2 fois sur le même sondage
     const [already] = await db.query(
       "SELECT 1 FROM votes WHERE Id_user = ? AND Id_Sondage = ? LIMIT 1",
       [userId, id_sondage]

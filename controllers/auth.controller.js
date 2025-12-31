@@ -3,27 +3,21 @@ const db = require("../db/db");
 const jwt = require("jsonwebtoken");
 const { sendOtpMail, sendResetMail } = require("./CodeLoginMailer");
 
-// Cache anti-spam (email unique) avec TTL
 const userCache = new Map();
-const CACHE_TTL = 30000; // 30 secondes
+const CACHE_TTL = 30000;
 
 const errorResponse = (res, message, status = 500) => {
   return res.status(status).json({ message });
 };
 
-// ✅ queryAsync compatible mysql2/promise
-// - SELECT => retourne un tableau de lignes
-// - INSERT/UPDATE/DELETE => retourne un objet result (affectedRows, insertId, etc.)
 const queryAsync = async (sql, params = []) => {
   const [result] = await db.query(sql, params);
   return result;
 };
 
-// OTP
 const generateOtp = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
-// Helpers cache TTL
 const cacheEmail = (email) => {
   const key = `email:${email}`;
   userCache.set(key, Date.now());
@@ -32,9 +26,7 @@ const cacheEmail = (email) => {
 
 const isEmailCached = (email) => userCache.has(`email:${email}`);
 
-// =====================
-// Création utilisateur
-// =====================
+
 exports.createUser = async (req, res) => {
   try {
     const { nom, prenom, email, password } = req.body;
@@ -43,7 +35,6 @@ exports.createUser = async (req, res) => {
       return errorResponse(res, "Tous les champs sont requis.", 400);
     }
 
-    // Anti-requêtes répétées
     if (isEmailCached(email)) {
       return errorResponse(res, "Cet email est déjà utilisé.", 400);
     }
@@ -75,9 +66,7 @@ exports.createUser = async (req, res) => {
   }
 };
 
-// =====================
-// Connexion utilisateur
-// =====================
+
 exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -116,14 +105,12 @@ exports.loginUser = async (req, res) => {
       { expiresIn: "5m" }
     );
 
-    // ✅ Répondre tout de suite (évite timeout proxy)
     res.json({
       requires2fa: true,
       preAuthToken,
       message: "Code de vérification envoyé",
     });
 
-    // ✅ Envoi mail après la réponse
     setImmediate(() => {
       sendOtpMail(user.email, user.prenom || user.nom, otp).catch((err) =>
         console.error("Email error (non-blocking):", err)
@@ -135,9 +122,7 @@ exports.loginUser = async (req, res) => {
   }
 };
 
-// =====================
-// Vérification 2FA
-// =====================
+
 exports.verify2fa = async (req, res) => {
   try {
     const { code, preAuthToken } = req.body;
@@ -173,7 +158,6 @@ exports.verify2fa = async (req, res) => {
 
     await queryAsync("UPDATE user_otp SET used = 1 WHERE id = ?", [otps[0].id]);
 
-    // cleanup async
     setImmediate(() => {
       queryAsync("DELETE FROM user_otp WHERE expires_at <= NOW()").catch((err) =>
         console.error("Cleanup error:", err)
@@ -196,9 +180,7 @@ exports.verify2fa = async (req, res) => {
   }
 };
 
-// =====================
-// Renvoi OTP
-// =====================
+
 exports.resend2fa = async (req, res) => {
   try {
     const { preAuthToken } = req.body;
@@ -240,10 +222,8 @@ exports.resend2fa = async (req, res) => {
       [decoded.userId, otp, expires]
     );
 
-    // ✅ répondre vite
     res.json({ message: "Code renvoyé avec succès" });
 
-    // email après réponse
     setImmediate(() => {
       sendOtpMail(user.email, user.prenom || user.nom, otp).catch((err) =>
         console.error("Email error:", err)
@@ -255,9 +235,7 @@ exports.resend2fa = async (req, res) => {
   }
 };
 
-// =====================
-// Forgot password
-// =====================
+
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -310,9 +288,7 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-// =====================
-// Verify reset code
-// =====================
+
 exports.verifyResetCode = async (req, res) => {
   try {
     const { code, preAuthToken } = req.body;
@@ -365,9 +341,7 @@ exports.verifyResetCode = async (req, res) => {
   }
 };
 
-// =====================
-// Reset password final
-// =====================
+
 exports.resetPassword = async (req, res) => {
   try {
     const { resetToken, newPassword } = req.body;

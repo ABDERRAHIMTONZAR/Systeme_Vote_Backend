@@ -1,8 +1,6 @@
 const db = require("../db/db.js");
 
-/* =========================================================
-   DASHBOARD STATS
-========================================================= */
+
 exports.getDashboardStats = async (req, res) => {
   const userId = req.userId;
 
@@ -33,14 +31,11 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-/* =========================================================
-   MONTHLY STATS
-========================================================= */
+
 exports.getMonthlyStats = async (req, res) => {
   const userId = req.userId;
 
-  // ✅ 1 seule requête, sans sous-requête corrélée
-  // visitors = nombre de votants uniques par mois (sur les sondages du user)
+ 
   const sql = `
     SELECT
       MONTH(S.date_creation) AS month,
@@ -75,9 +70,7 @@ exports.getMonthlyStats = async (req, res) => {
 };
 
 
-/* =========================================================
-   POLL STATUS DISTRIBUTION
-========================================================= */
+
 exports.getPollStatusDistribution = async (req, res) => {
   const userId = req.userId;
 
@@ -98,9 +91,7 @@ exports.getPollStatusDistribution = async (req, res) => {
   }
 };
 
-/* =========================================================
-   VOTER ENGAGEMENT DISTRIBUTION
-========================================================= */
+
 exports.getVoterEngagementDistribution = async (req, res) => {
   const userId = req.userId;
 
@@ -130,9 +121,7 @@ exports.getVoterEngagementDistribution = async (req, res) => {
   }
 };
 
-/* =========================================================
-   CREATE POLL (transaction + bulk insert)
-========================================================= */
+
 exports.createPoll = async (req, res) => {
   console.log("BODY REÇU :", req.body);
 
@@ -164,7 +153,6 @@ exports.createPoll = async (req, res) => {
 
     const values = options.map((opt) => [opt, pollId]);
 
-    // ⚠️ selon ton schéma, la colonne c’est id_sondage ou Id_Sondage
     await conn.query(
       `INSERT INTO optionssondage (option_text, id_sondage) VALUES ?`,
       [values]
@@ -172,7 +160,6 @@ exports.createPoll = async (req, res) => {
 
     await conn.commit();
 
-    // ✅ SOCKET : informer les clients que la liste des polls a changé
     const io = req.app.get("io");
     if (io) io.emit("polls:changed");
 
@@ -186,9 +173,7 @@ exports.createPoll = async (req, res) => {
   }
 };
 
-/* =========================================================
-   GET ALL POLLS
-========================================================= */
+
 exports.getAllPolls = async (req, res) => {
   const userId = req.userId;
 
@@ -231,9 +216,7 @@ exports.getAllPolls = async (req, res) => {
   }
 };
 
-/* =========================================================
-   UPDATE POLL
-========================================================= */
+
 exports.updatePoll = async (req, res) => {
   const { question, Categorie, End_time } = req.body;
   const id = req.params.id;
@@ -274,9 +257,7 @@ exports.updatePoll = async (req, res) => {
   }
 };
 
-/* =========================================================
-   DELETE POLL (transaction)
-========================================================= */
+
 exports.deletePoll = async (req, res) => {
   const pollId = req.params.id;
   const userId = req.userId;
@@ -297,13 +278,8 @@ exports.deletePoll = async (req, res) => {
     }
 
     await conn.query("DELETE FROM votes WHERE Id_Sondage = ?", [pollId]);
-
-    // ⚠️ Dans ton code tu avais Id_Sondage ici, mais dans createPoll tu utilises id_sondage
-    // Choisis UNE SEULE convention dans la DB (recommandé: Id_Sondage partout)
     await conn.query("DELETE FROM optionssondage WHERE id_sondage = ?", [pollId]);
-
     await conn.query("DELETE FROM sondages WHERE Id_Sondage = ?", [pollId]);
-
     await conn.commit();
 
     const io = req.app.get("io");

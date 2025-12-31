@@ -1,9 +1,6 @@
 const db = require("../db/db");
 const { notifyVoters } = require("./notifyVoters");
 
-// ⚠️ IMPORTANT : dans ta DB tu utilises parfois Categorie et parfois categorie
-// Ici je suppose que la colonne est "Categorie" (comme dans plusieurs de tes autres queries).
-// Si ta colonne est réellement "categorie", change S.Categorie -> S.categorie et dans getCategories aussi.
 const baseSelect = `
   SELECT
     S.Id_Sondage AS id,
@@ -16,9 +13,7 @@ const baseSelect = `
   FROM sondages S
 `;
 
-/* =========================================================
-   GET VOTED POLLS
-========================================================= */
+
 exports.getVotedPolls = async (req, res) => {
   const userId = req.userId;
   const categorie = req.query.categorie;
@@ -48,9 +43,7 @@ exports.getVotedPolls = async (req, res) => {
   }
 };
 
-/* =========================================================
-   GET UNVOTED POLLS
-========================================================= */
+
 exports.getUnvotedPolls = async (req, res) => {
   const userId = req.userId;
   const categorie = req.query.categorie;
@@ -80,10 +73,7 @@ exports.getUnvotedPolls = async (req, res) => {
   }
 };
 
-/* =========================================================
-   GET POLL RESULTS
-   ⚠️ mieux: id en params, mais je garde ton body
-========================================================= */
+
 exports.getPollResults = async (req, res) => {
   const { id_sondage } = req.body;
 
@@ -91,8 +81,7 @@ exports.getPollResults = async (req, res) => {
     return res.status(400).json({ message: "id_sondage requis." });
   }
 
-  // ⚠️ Ici ton schema est incohérent : optionssondage a parfois Id_Sondage parfois id_sondage
-  // Je mets Id_Sondage partout pour être cohérent avec tes autres queries (JOIN, etc.)
+
   const sql = `
     SELECT
       O.Id_Option,
@@ -117,16 +106,13 @@ exports.getPollResults = async (req, res) => {
 
 
 
-/* =========================================================
-   AUTO-FINISH (reusable)
-========================================================= */
+
 exports.runAutoFinish = async (io) => {
   try {
     // Debug temps DB
     const [t] = await db.query("SELECT NOW() AS now, UTC_TIMESTAMP() AS utc, @@session.time_zone AS tz");
     console.log("DB time:", t[0]);
 
-    // ✅ UTC pour éviter le “pollsToFinish: 0”
     const [pollsToFinish] = await db.query(`
         SELECT Id_Sondage
     FROM sondages
